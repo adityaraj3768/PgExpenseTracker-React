@@ -17,10 +17,27 @@ export const AddExpenseModal = ({ isOpen, onClose }) => {
   
   const { fetchGroup, currentGroup, fetchAllGroups: contextFetchAllGroups } = useGroup();
 
-  const commonTags = [
-    "grocery", "vegetables", "fruits", "bread", "paneer", "milk",
-    "gas", "rice", "dal", "atta", "others"
-  ];
+ const commonTags = [
+  // 🍴 Food & Snacks
+  "canteen", "mess", "maggi", "chai", "coffee", "snacks",
+  "pizza", "burger", "cold drink", "fast food",
+
+  // 🏠 Hostel / PG Essentials
+  "rent", "electricity", "water", "laundry", "cleaning",
+
+  // 📚 Study & College Stuff
+  "stationery", "books", "photocopy", "printing", "exam fees",
+
+  // 🚌 Travel
+  "bus", "auto", "cab", "fuel", "metro",
+
+  // 🎉 Lifestyle & Fun
+  "movie", "outing", "party", "gaming", "subscription",
+
+  // 🛒 Household / Groceries (your original list)
+  "grocery", "vegetables", "fruits", "bread", "paneer", "milk",
+  "gas", "rice", "dal", "atta", "others"
+];
 
   // Helper function to get group ID
   const getGroupId = (group) => group?.groupCode || group?.code || group?.id;

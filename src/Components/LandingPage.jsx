@@ -30,7 +30,7 @@ export function LandingPage({
   const [token, setToken] = useState(false);
   const navigate = useNavigate();
 
-  const { setCurrentGroup, fetchAllGroups } = useGroup();
+  const { setCurrentGroup, fetchAllGroups, setCoins } = useGroup();
   const { currentUserId } = useUser();
 
   // Check token on mount
@@ -40,8 +40,8 @@ export function LandingPage({
       setToken(true);
       
       // Check notification setup for already logged in users
+      // If user is logged in, check notification setup
       if (currentUserId) {
-        console.log('Checking notification setup for logged in user:', currentUserId);
         checkNotificationSetup(currentUserId, fetchAllGroups);
       }
     }
@@ -89,9 +89,12 @@ export function LandingPage({
           Authorization: `Bearer ${token}`,
         },
       });
+      //this is the  all groups of the user that he belongs to
+      const groups = response.data.groups;
 
-      const groups = response.data;
-      console.log('User groups:', groups);
+  //this is the user's monthly limit coins
+  const coins  = response.data.monthlyLimitCoins;
+  setCoins(coins);
 
       if (Array.isArray(groups) && groups.length > 0) {
         if (groups.length === 1) {
@@ -109,7 +112,7 @@ export function LandingPage({
         alert('You are not part of any group yet. Please create or join a group first.');
       }
     } catch (error) {
-      console.error('Error fetching user groups:', error);
+      // Show alert if fetching user groups fails
       alert('Failed to fetch your groups. Please try again.');
     }
   };

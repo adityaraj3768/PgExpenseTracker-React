@@ -2,9 +2,18 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
 import axios from "axios";
 import { toast } from "react-hot-toast";
-import { 
-  Plus, Users, TrendingUp, IndianRupee, ArrowRight, ArrowLeft, X, Copy, Check 
-} from 'lucide-react';
+import {
+  Plus,
+  Users,
+  TrendingUp,
+  IndianRupee,
+  ArrowRight,
+  ArrowLeft,
+  X,
+  Copy,
+  Check,
+  Pen,
+} from "lucide-react";
 
 // Context and utilities
 import { useGroup } from "../Context/GroupContext";
@@ -13,21 +22,102 @@ import { calculateBalances, getTotalExpenses } from "../Utils/Calculation";
 import { getApiUrl } from "../Utils/api";
 
 // Components
+
 import { ExpenseList } from "./ExpenseList";
 import { MemberList } from "./MemberList";
 import { AddExpenseModal } from "./AddExpenseModal";
+import { Coins } from "./Coins";
+
+// Small popup/modal for adding coins and setting monthly limit
+function CoinsPopup({ isOpen, onClose, onSave, onAddCoins, loading, monthlyLimitSet }) {
+  const [value, setValue] = useState("");
+  const [mode, setMode] = useState("setLimit"); // 'setLimit' or 'addCoins'
+  const [loadingButton, setLoadingButton] = useState(null); // 'setLimit' or 'addCoins' or null
+  useEffect(() => {
+    if (isOpen) {
+      setValue("");
+      setMode("setLimit");
+    }
+  }, [isOpen]);
+  if (!isOpen) return null;
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 backdrop-blur-sm">
+      <div className="bg-white rounded-xl shadow-lg p-6 w-80 relative border border-yellow-200">
+        <button
+          className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
+          onClick={onClose}
+          disabled={loading}
+        >
+          <X className="w-5 h-5" />
+        </button>
+        <h3 className="text-lg font-semibold mb-2 text-yellow-700">
+          {monthlyLimitSet ? "Manage Coins" : "Set Monthly Limit"}
+        </h3>
+        <label className="block text-sm text-gray-700 mb-1">
+          {mode === "setLimit" ? "Coins / Monthly Limit" : "Coins to Add"}
+        </label>
+        {mode === "setLimit" && (
+          <div className="text-xs text-yellow-700 mb-2 bg-yellow-50 border border-yellow-200 rounded px-2 py-1">
+            Setting the limit will reset <b>remaining coins</b> and <b>limit</b> to the new value.
+          </div>
+        )}
+        <input
+          type="number"
+          min="0"
+          className="w-full border border-yellow-300 rounded px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-yellow-200"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          disabled={loading}
+        />
+        <div className="flex gap-2">
+          <button
+            className="flex-1 py-2 rounded font-semibold transition-colors bg-[#f1c40f] text-white hover:bg-[#ffb400]"
+            onClick={async () => {
+              if (value !== "") {
+                setLoadingButton("setLimit");
+                await onSave(Number(value));
+                setLoadingButton(null);
+              }
+            }}
+            disabled={loadingButton === "setLimit" || value === ""}
+          >
+            {loadingButton === "setLimit" ? "Saving..." : "Set Limit"}
+          </button>
+          {monthlyLimitSet && (
+            <button
+              className="flex-1 py-2 rounded font-semibold transition-colors bg-[#2ecc71] text-white hover:bg-[#27ae60]"
+              onClick={async () => {
+                if (value !== "") {
+                  setLoadingButton("addCoins");
+                  await onAddCoins(Number(value));
+                  setLoadingButton(null);
+                }
+              }}
+              disabled={loadingButton === "addCoins" || value === ""}
+            >
+              {loadingButton === "addCoins" ? "Adding..." : "Add Coins"}
+            </button>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export function GroupDashboard() {
+  const { monthlyLimit, setMonthlyLimit, remainingCoins, setRemainingCoins } = useGroup();
+  const [showCoinsPopup, setShowCoinsPopup] = useState(false);
+  const [savingCoins, setSavingCoins] = useState(false);
   // === STATE MANAGEMENT ===
-  const [activeTab, setActiveTab] = useState('expenses');
+  const [activeTab, setActiveTab] = useState("expenses");
   const [showAddExpenses, setShowAddExpenses] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [copySuccess, setCopySuccess] = useState(false);
-  
+
   // Delete confirmation modal state
   const [expenseToDelete, setExpenseToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
-  
+
   // === DATE INITIALIZATION ===
   // Set default month to previous month for better UX
   const today = new Date();
@@ -35,16 +125,17 @@ export function GroupDashboard() {
   const initialYear = today.getFullYear();
   const previousMonth = initialMonth === 0 ? 11 : initialMonth - 1;
   const previousYear = initialMonth === 0 ? initialYear - 1 : initialYear;
-  
+
   const [selectedMonth, setSelectedMonth] = useState(previousMonth);
   const [selectedYear, setSelectedYear] = useState(previousYear);
 
   // === CONTEXT HOOKS ===
-  const { currentGroup, fetchGroup, fetchInitialGroup, currentBalance } = useGroup();
+  const { currentGroup, fetchGroup, fetchInitialGroup, currentBalance } =
+    useGroup();
   const { currentUserId } = useUser();
 
   // === COPY FUNCTIONALITY ===
-  
+
   /**
    * Copy group code to clipboard for sharing
    */
@@ -54,32 +145,35 @@ export function GroupDashboard() {
       setCopySuccess(true);
       toast.success("Group code copied to clipboard!", {
         duration: 2000,
-        position: 'top-center',
+        position: "top-center",
       });
-      
+
       // Reset copy success state after 2 seconds
       setTimeout(() => {
         setCopySuccess(false);
       }, 2000);
     } catch (error) {
-      toast.error("Failed to copy group code");
-      console.error('Copy failed:', error);
+  toast.error("Failed to copy group code");
+  // Error copying group code to clipboard
     }
   };
 
   // === EXPENSE DELETION HANDLERS ===
-  
+
   /**
    * Refreshes group data after an expense is deleted
    * Called after successful deletion to update all calculations
    */
-  const handleExpenseDeleted = useCallback(async (deletedExpenseId) => {
-    try {
-      await fetchGroup();
-    } catch (error) {
-      console.error('Error refreshing group data after deletion:', error);
-    }
-  }, [fetchGroup]);
+  const handleExpenseDeleted = useCallback(
+    async (deletedExpenseId) => {
+      try {
+        await fetchGroup();
+      } catch (error) {
+  // Error refreshing group data after deletion
+      }
+    },
+    [fetchGroup]
+  );
 
   /**
    * Shows the delete confirmation modal
@@ -96,22 +190,22 @@ export function GroupDashboard() {
   const handleDelete = async (expenseId) => {
     const token = localStorage.getItem("token");
     setIsDeleting(true);
-    
+
     try {
       await axios.delete(getApiUrl(`/pg/delete/expense/${expenseId}`), {
         headers: { Authorization: `Bearer ${token}` },
       });
-      
+
       toast.success("Expense deleted successfully!", {
         duration: 3000,
-        position: 'top-center',
+        position: "top-center",
       });
-      
+
       setExpenseToDelete(null);
       await handleExpenseDeleted(expenseId);
-      
     } catch (error) {
-      const errorMessage = error.response?.data?.message || "Something went wrong";
+      const errorMessage =
+        error.response?.data?.message || "Something went wrong";
       toast.error(errorMessage);
     } finally {
       setIsDeleting(false);
@@ -119,7 +213,7 @@ export function GroupDashboard() {
   };
 
   // === COMPUTED VALUES (MEMOIZED) ===
-  
+
   /**
    * Calculate total expenses across all time periods
    */
@@ -135,10 +229,12 @@ export function GroupDashboard() {
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
-    return (currentGroup?.expenses || []).filter(expense => {
+    return (currentGroup?.expenses || []).filter((expense) => {
       const expenseDate = new Date(expense.paymentDate);
-      return expenseDate.getMonth() === currentMonth && 
-             expenseDate.getFullYear() === currentYear;
+      return (
+        expenseDate.getMonth() === currentMonth &&
+        expenseDate.getFullYear() === currentYear
+      );
     });
   }, [currentGroup?.expenses]);
 
@@ -150,74 +246,102 @@ export function GroupDashboard() {
   }, [currentMonthExpenses]);
 
   // === UTILITY FUNCTIONS ===
-  
+
   /**
    * Filter expenses by user ID with multiple matching strategies
    * Handles different user ID formats and name matching
    */
   const getUserExpenses = useCallback((expenses, userId, users) => {
     if (!userId || !users) return [];
-    
-    const currentUser = users.find(user => 
-      user.userId === userId || 
-      user.userId === String(userId) ||
-      String(user.userId) === String(userId)
+
+    const currentUser = users.find(
+      (user) =>
+        user.userId === userId ||
+        user.userId === String(userId) ||
+        String(user.userId) === String(userId)
     );
-    
-    return expenses.filter(expense => {
-      return expense.paidBy === userId ||
-             expense.userId === userId ||
-             expense.paidBy === String(userId) ||
-             expense.userId === String(userId) ||
-             String(expense.paidBy) === String(userId) ||
-             String(expense.userId) === String(userId) ||
-             (currentUser && expense.paidBy === currentUser.name) ||
-             (currentUser && expense.paidBy === currentUser.username);
+
+    return expenses.filter((expense) => {
+      return (
+        expense.paidBy === userId ||
+        expense.userId === userId ||
+        expense.paidBy === String(userId) ||
+        expense.userId === String(userId) ||
+        String(expense.paidBy) === String(userId) ||
+        String(expense.userId) === String(userId) ||
+        (currentUser && expense.paidBy === currentUser.name) ||
+        (currentUser && expense.paidBy === currentUser.username)
+      );
     });
   }, []);
 
   // === USER-SPECIFIC CALCULATIONS ===
-  
+
   /**
    * Calculate current user's expenses for the current month
    */
   const currentUserCurrentMonthExpense = useMemo(() => {
-    if (!currentGroup?.users || !currentUserId || !currentMonthExpenses.length) {
+    if (
+      !currentGroup?.users ||
+      !currentUserId ||
+      !currentMonthExpenses.length
+    ) {
       return 0;
     }
-    
-    const userExpenses = getUserExpenses(currentMonthExpenses, currentUserId, currentGroup.users);
-    return userExpenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0);
-  }, [currentMonthExpenses, currentUserId, currentGroup?.users, getUserExpenses]);
+
+    const userExpenses = getUserExpenses(
+      currentMonthExpenses,
+      currentUserId,
+      currentGroup.users
+    );
+    return userExpenses.reduce(
+      (sum, expense) => sum + parseFloat(expense.amount),
+      0
+    );
+  }, [
+    currentMonthExpenses,
+    currentUserId,
+    currentGroup?.users,
+    getUserExpenses,
+  ]);
 
   /**
    * Calculate each user's current month expenses for MemberList component
    */
   const currentMonthUserExpenses = useMemo(() => {
     if (!currentGroup?.users || currentMonthExpenses.length === 0) return [];
-    
-    return currentGroup.users.map(user => {
-      const userExpenses = getUserExpenses(currentMonthExpenses, user.userId, currentGroup.users);
-      const totalSpent = userExpenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0);
-      
+
+    return currentGroup.users.map((user) => {
+      const userExpenses = getUserExpenses(
+        currentMonthExpenses,
+        user.userId,
+        currentGroup.users
+      );
+      const totalSpent = userExpenses.reduce(
+        (sum, expense) => sum + parseFloat(expense.amount),
+        0
+      );
+
       return {
         userId: user.userId,
-        totalSpent: totalSpent
+        totalSpent: totalSpent,
       };
     });
   }, [currentGroup?.users, currentMonthExpenses, getUserExpenses]);
   // === PREVIOUS MONTHS TAB CALCULATIONS ===
-  
+
   /**
    * Filter expenses based on selected month and year (for Previous Months tab)
    */
   const filteredExpenses = useMemo(() => {
     if (!currentGroup?.expenses) return [];
-    
-    return currentGroup.expenses.filter(expense => {
+
+    return currentGroup.expenses.filter((expense) => {
       const expenseDate = new Date(expense.paymentDate);
-      return expenseDate.getMonth() === selectedMonth &&
-             expenseDate.getFullYear() === selectedYear;
+      return (
+        expenseDate.getMonth() === selectedMonth &&
+        expenseDate.getFullYear() === selectedYear
+      );
     });
   }, [currentGroup?.expenses, selectedMonth, selectedYear]);
 
@@ -233,14 +357,21 @@ export function GroupDashboard() {
    */
   const filteredUserExpenses = useMemo(() => {
     if (!currentGroup?.users || filteredExpenses.length === 0) return [];
-    
-    return currentGroup.users.map(user => {
-      const userExpenses = getUserExpenses(filteredExpenses, user.userId, currentGroup.users);
-      const totalSpent = userExpenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0);
-      
+
+    return currentGroup.users.map((user) => {
+      const userExpenses = getUserExpenses(
+        filteredExpenses,
+        user.userId,
+        currentGroup.users
+      );
+      const totalSpent = userExpenses.reduce(
+        (sum, expense) => sum + parseFloat(expense.amount),
+        0
+      );
+
       return {
         userId: user.userId,
-        totalSpent: totalSpent
+        totalSpent: totalSpent,
       };
     });
   }, [currentGroup?.users, filteredExpenses, getUserExpenses]);
@@ -252,13 +383,20 @@ export function GroupDashboard() {
     if (!currentGroup?.users || !currentUserId || !filteredExpenses.length) {
       return 0;
     }
-    
-    const userExpenses = getUserExpenses(filteredExpenses, currentUserId, currentGroup.users);
-    return userExpenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0);
+
+    const userExpenses = getUserExpenses(
+      filteredExpenses,
+      currentUserId,
+      currentGroup.users
+    );
+    return userExpenses.reduce(
+      (sum, expense) => sum + parseFloat(expense.amount),
+      0
+    );
   }, [filteredExpenses, currentUserId, currentGroup?.users, getUserExpenses]);
 
   // === EFFECTS ===
-  
+
   /**
    * Load group data on component mount
    * Fetch initial group if no currentGroup exists, otherwise just set loading to false
@@ -266,13 +404,13 @@ export function GroupDashboard() {
   useEffect(() => {
     const loadGroupData = async () => {
       if (!currentUserId) return;
-      
+
       if (!currentGroup) {
         setIsLoading(true);
         try {
           await fetchInitialGroup();
         } catch (error) {
-          console.error('Error fetching initial group data:', error);
+          // Error fetching initial group data
         } finally {
           setIsLoading(false);
         }
@@ -287,7 +425,7 @@ export function GroupDashboard() {
   // === LOADING AND ERROR STATES ===
 
   // === LOADING AND ERROR STATES ===
-  
+
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50">
@@ -313,7 +451,9 @@ export function GroupDashboard() {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 via-white to-indigo-50">
         <div className="text-center">
-          <p className="text-gray-600">No group found. Please create or join a group.</p>
+          <p className="text-gray-600">
+            No group found. Please create or join a group.
+          </p>
         </div>
       </div>
     );
@@ -322,9 +462,9 @@ export function GroupDashboard() {
   // === RENDER ===
 
   // === RENDER ===
-  
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 relative">
       {/* === HEADER === */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-white/20 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -338,7 +478,7 @@ export function GroupDashboard() {
                 <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate max-w-48 sm:max-w-none">
                   {currentGroup.groupName}
                 </h1>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 mb-1">
                   <p className="text-xs sm:text-sm text-gray-600">
                     Code: {currentGroup.groupCode}
                   </p>
@@ -371,21 +511,129 @@ export function GroupDashboard() {
 
       {/* === MAIN CONTENT === */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+        {/* Coins Card Above Statistics (Clickable) */}
+        <div className="mb-6 sm:mb-8">
+          {/* If monthly limit is not set, show a prompt to the user */}
+          {monthlyLimit === 0 ? (
+            <div className="bg-gradient-to-r from-pink-300 via-purple-300 to-indigo-300 text-gray-900 rounded-2xl px-6 py-4 mb-4 text-center shadow-md">
+  <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+    <span className="font-semibold text-lg">
+      🚀 To set your monthly limit click below👇 
+    </span>
+  </div>
+</div>
+
+
+          ) : null}
+          <div
+            className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 sm:p-6 shadow-lg border border-white/20 cursor-pointer hover:shadow-xl transition-shadow outline-none focus:ring-2 focus:ring-yellow-300"
+            tabIndex={0}
+            title="Click to set monthly limit"
+            onClick={() => setShowCoinsPopup(true)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" || e.key === " ") setShowCoinsPopup(true);
+            }}
+          >
+            {/* Show remaining coins: limit - total spent */}
+            <Coins count={remainingCoins} />
+            <div className="text-xs text-gray-500 mt-1 mb-2">Remaining coins</div>
+            {/* Progress Bar */}
+            <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden mb-1">
+              <div
+                className={
+                  `h-full transition-all duration-500 ` +
+                  (monthlyLimit === 0
+                    ? 'bg-gray-300'
+                    : (monthlyLimit - remainingCoins) / monthlyLimit < 0.5
+                    ? 'bg-gradient-to-r from-green-400 to-green-600'
+                    : (monthlyLimit - remainingCoins) / monthlyLimit < 0.8
+                    ? 'bg-gradient-to-r from-yellow-400 to-yellow-600'
+                    : 'bg-gradient-to-r from-red-400 to-red-600')
+                }
+                style={{ width: monthlyLimit > 0 ? `${Math.max(0, Math.min(100, (remainingCoins / monthlyLimit) * 100))}%` : '0%' }}
+              ></div>
+            </div>
+            <div className="flex justify-between text-xs text-gray-500">
+              <span>0</span>
+              <span>{monthlyLimit} limit</span>
+            </div>
+          </div>
+        </div>
+        {/* Coins Popup Modal */}
+        <CoinsPopup
+          isOpen={showCoinsPopup}
+          onClose={() => setShowCoinsPopup(false)}
+          loading={savingCoins}
+          monthlyLimitSet={monthlyLimit > 0}
+          onSave={async (newLimit) => {
+            setSavingCoins(true);
+            try {
+              const token = localStorage.getItem("token");
+              const response = await axios.post(
+                getApiUrl("/pg/set-monthly-limit"),
+                { limit: newLimit },
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+              const updatedLimit =
+                typeof response.data === "number"
+                  ? response.data
+                  : response.data.monthlyLimitCoins ??
+                    response.data.monthlyLimit ??
+                    response.data.limit ??
+                    newLimit;
+              setMonthlyLimit(updatedLimit);
+              setRemainingCoins(updatedLimit);
+              toast.success("Monthly limit updated!");
+              setShowCoinsPopup(false);
+            } catch (err) {
+              // Error updating monthly limit
+              toast.error("Failed to update monthly limit");
+            } finally {
+              setSavingCoins(false);
+            }
+          }}
+          onAddCoins={async (coinsToAdd) => {
+            setSavingCoins(true);
+            try {
+              const token = localStorage.getItem("token");
+              const response = await axios.post(
+                getApiUrl("/pg/add-coins"),
+                { coins: coinsToAdd },
+                { headers: { Authorization: `Bearer ${token}` } }
+              );
+              // Assume backend returns the number of coins added
+              const coinsAdded = typeof response.data === "number"
+                ? response.data
+                : response.data.coins ?? coinsToAdd;
+              setMonthlyLimit(monthlyLimit + coinsAdded);
+              setRemainingCoins(remainingCoins + coinsAdded);
+              toast.success("Coins added!");
+              setShowCoinsPopup(false);
+            } catch (err) {
+              // Error adding coins
+              toast.error("Failed to add coins");
+            } finally {
+              setSavingCoins(false);
+            }
+          }}
+        />
         {/* === STATISTICS OVERVIEW === */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
           {/* Total Expenses Card */}
           <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-4 sm:p-6 shadow-lg border border-white/20">
             <div className="flex items-center justify-between">
               <div className="flex-1 min-w-0">
-                <p className="text-xs sm:text-sm text-gray-600">Total Expenses</p>
+                <p className="text-xs sm:text-sm text-gray-600">
+                  Total Expenses
+                </p>
                 <div className="flex items-center gap-1 sm:gap-2 mt-1">
                   <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
                   <p className="text-lg sm:text-2xl font-bold text-gray-900 truncate">
-                    {activeTab === 'previous' 
-                      ? totalFilteredExpense.toFixed(2) 
-                      : activeTab === 'expenses'
+                    {activeTab === "previous"
+                      ? totalFilteredExpense.toFixed(2)
+                      : activeTab === "expenses"
                       ? totalCurrentMonthExpense.toFixed(2)
-                      : activeTab === 'members'
+                      : activeTab === "members"
                       ? totalCurrentMonthExpense.toFixed(2)
                       : totalExpense.toFixed(2)}
                   </p>
@@ -399,7 +647,9 @@ export function GroupDashboard() {
           <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-4 sm:p-6 shadow-lg border border-white/20">
             <div className="flex items-center justify-between">
               <div className="flex-1 min-w-0">
-                <p className="text-xs sm:text-sm text-gray-600">Total Members</p>
+                <p className="text-xs sm:text-sm text-gray-600">
+                  Total Members
+                </p>
                 <p className="text-lg sm:text-2xl font-bold text-gray-900 mt-1">
                   {currentGroup.users?.length || 0}
                 </p>
@@ -412,17 +662,20 @@ export function GroupDashboard() {
           <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-4 sm:p-6 shadow-lg border border-white/20 sm:col-span-2 lg:col-span-1">
             <div className="flex items-center justify-between">
               <div className="flex-1 min-w-0">
-                <p className="text-xs sm:text-sm text-gray-600">Your Total Spent</p>
+                <p className="text-xs sm:text-sm text-gray-600">
+                  Your Total Spent
+                </p>
                 <p className="text-lg sm:text-2xl font-bold text-green-600 mt-1 truncate">
-                  ₹ {activeTab === 'previous'
+                  ₹{" "}
+                  {activeTab === "previous"
                     ? currentUserExpense.toFixed(2)
-                    : activeTab === 'expenses'
+                    : activeTab === "expenses"
                     ? currentUserCurrentMonthExpense.toFixed(2)
-                    : activeTab === 'members'
+                    : activeTab === "members"
                     ? currentUserCurrentMonthExpense.toFixed(2)
-                    : typeof currentBalance === 'number'
+                    : typeof currentBalance === "number"
                     ? currentBalance.toFixed(2)
-                    : '0.00'}
+                    : "0.00"}
                 </p>
               </div>
               <div className="h-6 w-6 sm:h-8 sm:w-8 rounded-full flex items-center justify-center bg-green-100 text-green-600 flex-shrink-0">
@@ -439,35 +692,35 @@ export function GroupDashboard() {
             <div className="flex space-x-2 sm:space-x-4 px-4 sm:px-6 min-w-max">
               {/* Current Month Expenses Tab */}
               <button
-                onClick={() => setActiveTab('expenses')}
+                onClick={() => setActiveTab("expenses")}
                 className={`py-3 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap ${
-                  activeTab === 'expenses'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                  activeTab === "expenses"
+                    ? "border-blue-500 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
               >
                 Expenses ({currentMonthExpenses?.length || 0})
               </button>
-              
+
               {/* Members Tab */}
               <button
-                onClick={() => setActiveTab('members')}
+                onClick={() => setActiveTab("members")}
                 className={`py-3 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap ${
-                  activeTab === 'members'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                  activeTab === "members"
+                    ? "border-blue-500 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
               >
                 Members ({currentGroup.users?.length || 0})
               </button>
-              
+
               {/* Previous Months Tab */}
               <button
-                onClick={() => setActiveTab('previous')}
+                onClick={() => setActiveTab("previous")}
                 className={`py-3 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap ${
-                  activeTab === 'previous'
-                    ? 'border-blue-500 text-blue-600'
-                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                  activeTab === "previous"
+                    ? "border-blue-500 text-blue-600"
+                    : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
               >
                 Previous Months
@@ -478,28 +731,28 @@ export function GroupDashboard() {
           {/* Tab Content */}
           <div className="p-4 sm:p-6">
             {/* Current Month Expenses Content */}
-            {activeTab === 'expenses' && (
-              <ExpenseList 
-                expenses={currentMonthExpenses || []} 
+            {activeTab === "expenses" && (
+              <ExpenseList
+                expenses={currentMonthExpenses || []}
                 onExpenseDeleted={handleExpenseDeleted}
                 onDeleteRequest={handleDeleteRequest}
               />
             )}
-            
+
             {/* Members Content */}
-            {activeTab === 'members' && (
-              Array.isArray(currentGroup.users) && currentGroup.users.length > 0 ? (
-                <MemberList 
-                  users={currentGroup.users} 
-                  balances={currentMonthUserExpenses} 
+            {activeTab === "members" &&
+              (Array.isArray(currentGroup.users) &&
+              currentGroup.users.length > 0 ? (
+                <MemberList
+                  users={currentGroup.users}
+                  balances={currentMonthUserExpenses}
                 />
               ) : (
                 <p className="text-center text-gray-500">No members found.</p>
-              )
-            )}
-            
+              ))}
+
             {/* Previous Months Content */}
-            {activeTab === 'previous' && (
+            {activeTab === "previous" && (
               <>
                 {/* Month/Year Selection Controls */}
                 <div className="mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -509,9 +762,9 @@ export function GroupDashboard() {
                       onClick={() => {
                         if (selectedMonth === 0) {
                           setSelectedMonth(11);
-                          setSelectedYear(prev => prev - 1);
+                          setSelectedYear((prev) => prev - 1);
                         } else {
-                          setSelectedMonth(prev => prev - 1);
+                          setSelectedMonth((prev) => prev - 1);
                         }
                       }}
                       className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
@@ -519,21 +772,24 @@ export function GroupDashboard() {
                     >
                       <ArrowLeft className="h-4 w-4 sm:h-5 sm:w-5" />
                     </button>
-                    
+
                     <span className="text-gray-700 font-medium text-sm sm:text-base px-2 sm:px-4 py-1 bg-gray-50 rounded-lg">
-                      {new Date(selectedYear, selectedMonth).toLocaleString('default', {
-                        month: 'long',
-                        year: 'numeric',
-                      })}
+                      {new Date(selectedYear, selectedMonth).toLocaleString(
+                        "default",
+                        {
+                          month: "long",
+                          year: "numeric",
+                        }
+                      )}
                     </span>
-                    
+
                     <button
                       onClick={() => {
                         if (selectedMonth === 11) {
                           setSelectedMonth(0);
-                          setSelectedYear(prev => prev + 1);
+                          setSelectedYear((prev) => prev + 1);
                         } else {
-                          setSelectedMonth(prev => prev + 1);
+                          setSelectedMonth((prev) => prev + 1);
                         }
                       }}
                       className="p-2 text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors"
@@ -547,19 +803,21 @@ export function GroupDashboard() {
                   <div className="flex items-center gap-2 w-full sm:w-auto">
                     <select
                       value={selectedMonth}
-                      onChange={e => setSelectedMonth(Number(e.target.value))}
+                      onChange={(e) => setSelectedMonth(Number(e.target.value))}
                       className="flex-1 sm:flex-none border border-gray-300 rounded-md px-2 sm:px-3 py-1 text-xs sm:text-sm text-gray-700 bg-white"
                     >
                       {Array.from({ length: 12 }, (_, i) => (
                         <option key={i} value={i}>
-                          {new Date(0, i).toLocaleString('default', { month: 'long' })}
+                          {new Date(0, i).toLocaleString("default", {
+                            month: "long",
+                          })}
                         </option>
                       ))}
                     </select>
 
                     <select
                       value={selectedYear}
-                      onChange={e => setSelectedYear(Number(e.target.value))}
+                      onChange={(e) => setSelectedYear(Number(e.target.value))}
                       className="flex-1 sm:flex-none border border-gray-300 rounded-md px-2 sm:px-3 py-1 text-xs sm:text-sm text-gray-700 bg-white"
                     >
                       {Array.from({ length: 5 }, (_, i) => {
@@ -578,14 +836,18 @@ export function GroupDashboard() {
                 {filteredUserExpenses.length > 0 && (
                   <div className="mb-6">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                      Member Expenses for {new Date(selectedYear, selectedMonth).toLocaleString('default', { 
-                        month: 'long', 
-                        year: 'numeric' 
-                      })}
+                      Member Expenses for{" "}
+                      {new Date(selectedYear, selectedMonth).toLocaleString(
+                        "default",
+                        {
+                          month: "long",
+                          year: "numeric",
+                        }
+                      )}
                     </h3>
-                    <MemberList 
-                      users={currentGroup.users} 
-                      balances={filteredUserExpenses} 
+                    <MemberList
+                      users={currentGroup.users}
+                      balances={filteredUserExpenses}
                     />
                   </div>
                 )}
@@ -595,8 +857,8 @@ export function GroupDashboard() {
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">
                     Expense Details
                   </h3>
-                  <ExpenseList 
-                    expenses={filteredExpenses} 
+                  <ExpenseList
+                    expenses={filteredExpenses}
                     onExpenseDeleted={handleExpenseDeleted}
                     onDeleteRequest={handleDeleteRequest}
                   />
@@ -608,7 +870,7 @@ export function GroupDashboard() {
       </main>
 
       {/* === MODALS === */}
-      
+
       {/* Add Expense Modal */}
       {showAddExpenses && (
         <AddExpenseModal
@@ -620,7 +882,7 @@ export function GroupDashboard() {
       {/* Delete Confirmation Modal */}
       {expenseToDelete && (
         <div className="fixed inset-0 z-[9999] flex items-center justify-center backdrop-blur-sm bg-black/30">
-          <motion.div 
+          <motion.div
             initial={{ opacity: 0, scale: 0.9, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
@@ -642,7 +904,7 @@ export function GroupDashboard() {
                 <X className="w-5 h-5" />
               </button>
             </div>
-            
+
             {/* Modal Content */}
             <p className="text-sm text-gray-600 mb-6">
               Are you sure you want to delete the expense{" "}
@@ -655,7 +917,7 @@ export function GroupDashboard() {
               </span>
               ?
             </p>
-            
+
             {/* Modal Actions */}
             <div className="flex justify-end space-x-3">
               <button
@@ -676,7 +938,7 @@ export function GroupDashboard() {
                     Deleting...
                   </>
                 ) : (
-                  'Delete'
+                  "Delete"
                 )}
               </button>
             </div>

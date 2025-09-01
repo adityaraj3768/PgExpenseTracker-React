@@ -60,7 +60,7 @@ export const AddExpenseModal = ({ isOpen, onClose }) => {
       const groups = await contextFetchAllGroups();
       setAllGroups(groups || []);
     } catch (error) {
-      console.error('Failed to fetch groups:', error);
+      // Failed to fetch groups
       setAllGroups([]);
     } finally {
       setIsLoadingGroups(false);
@@ -105,7 +105,7 @@ export const AddExpenseModal = ({ isOpen, onClose }) => {
         });
         handleClose();
       } catch (error) {
-        console.error('Failed to add expense:', error);
+        // Failed to add expense
         toast.error('Error adding expense', {
           duration: 2000,
           position: 'top-center',

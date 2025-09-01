@@ -15,7 +15,7 @@ export const calculateBalances=(expenses,users)=>{
     });
   });
 
-    console.log(balances)
+  // balances calculated
     return Object.entries(balances).map(([userId, totalSpent]) => ({
     userId,
     totalSpent: Math.round(totalSpent * 100) / 100

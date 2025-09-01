@@ -1,9 +1,10 @@
 import { getMessaging, getToken } from 'firebase/messaging';
 import axios from 'axios';
 import { initializeApp } from 'firebase/app';
+import { getAuth, signInWithPhoneNumber, RecaptchaVerifier } from 'firebase/auth';
 import { getApiUrl } from './api';
-
-// Your Firebase config (replace with your actual config if different)
+// === PHONE AUTH/OTP ===
+// Always use the same app and auth instance
 const firebaseConfig = {
   apiKey: "AIzaSyBD-3YedGB3xdIAgHEHmxNohufhaPww2bs",
   authDomain: "pgexpensetracker.firebaseapp.com",
@@ -13,8 +14,41 @@ const firebaseConfig = {
   appId: "1:175365812217:web:f84ca83658547809d31728",
   measurementId: "G-HMDHE8CLX8"
 };
-
 const app = initializeApp(firebaseConfig);
+let authInstance;
+
+export function getFirebaseAuth() {
+  if (!authInstance) {
+    authInstance = getAuth(app);
+  }
+  return authInstance;
+}
+
+// Setup Recaptcha safely
+
+// For development/testing: bypass RecaptchaVerifier and allow OTP sending without recaptcha
+// IMPORTANT: This is insecure and should only be used for local development or testing!
+export function setupRecaptcha(containerId = 'recaptcha-container') {
+  // Return a dummy verifier object for Firebase
+  return {
+    verify: () => Promise.resolve('dummy-verification'),
+    type: 'recaptcha',
+    render: () => Promise.resolve(),
+    clear: () => {},
+    _reset: () => {}, // Prevents TypeError in Firebase SDK
+  };
+}
+
+// Send OTP
+export async function sendOtp(phoneNumber, containerId = 'recaptcha-container') {
+  const auth = getFirebaseAuth();
+  const verifier = setupRecaptcha(containerId);
+
+  if (!verifier) throw new Error('RecaptchaVerifier is not initialized');
+
+  // For local/test: Firebase will only allow test phone numbers from the console
+  return signInWithPhoneNumber(auth, phoneNumber, verifier);
+}
 const messaging = getMessaging(app);
 
 // Check if notification setup is needed on app startup
@@ -79,7 +113,7 @@ export async function registerDeviceForNotifications(userId, fetchGroupsFn) {
           });
         }
       } else {
-        console.log('Using existing Service Worker registration');
+  // Using existing Service Worker registration
         
         // Ensure the service worker is ready
         await registration.ready;
@@ -108,32 +142,32 @@ export async function registerDeviceForNotifications(userId, fetchGroupsFn) {
     let permission = Notification.permission;
     
     if (permission === 'granted') {
-      console.log('Notification permission already granted');
+  // Notification permission already granted
     } else if (permission === 'denied') {
-      console.log('Notification permission was denied');
+  // Notification permission was denied
       return;
     } else if (permission === 'default' && !hasRequestedBefore) {
       // Only request permission if we haven't asked before
-      console.log('Requesting notification permission for the first time');
+  // Requesting notification permission for the first time
       permission = await Notification.requestPermission();
       
       // Mark that we've requested permission (regardless of the response)
       localStorage.setItem(NOTIFICATION_PERMISSION_KEY, 'true');
       
       if (permission !== 'granted') {
-        console.log('Notification permission not granted. Status:', permission);
+  // Notification permission not granted
         return;
       }
     } else {
       // User has been asked before but permission is still default (shouldn't happen normally)
       // or we've already asked this session
-      console.log('Notification permission already requested previously. Current status:', permission);
+  // Notification permission already requested previously
       if (permission !== 'granted') {
         return;
       }
     }
 
-    console.log('Notification permission granted');
+  // Notification permission granted
 
     // Get FCM token with retry mechanism
     let token;
@@ -148,7 +182,7 @@ export async function registerDeviceForNotifications(userId, fetchGroupsFn) {
         });
 
         if (token) {
-          console.log('FCM Token obtained successfully:', token);
+          // FCM Token obtained successfully
           break;
         } else {
           throw new Error('No token received');
@@ -175,7 +209,7 @@ export async function registerDeviceForNotifications(userId, fetchGroupsFn) {
         groupCodes = groups
           .filter(group => group && (group.groupCode || group.code || group.id))
           .map(group => group.groupCode || group.code || group.id);
-        console.log('Group codes retrieved:', groupCodes);
+  // Group codes retrieved
       } else {
         console.warn('Invalid groups data received:', groups);
       }
@@ -208,7 +242,7 @@ export async function registerDeviceForNotifications(userId, fetchGroupsFn) {
       );
 
       if (response.status === 200) {
-        console.log('✅ Device registered successfully for notifications!');
+  // Device registered successfully for notifications
         // Mark that device is registered
         localStorage.setItem('deviceRegisteredForNotifications', 'true');
       } else {

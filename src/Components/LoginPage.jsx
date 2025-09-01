@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
-import { Eye, EyeOff, TrendingUp, Smartphone, Lock } from 'lucide-react';
+import { Eye, EyeOff, TrendingUp, Smartphone, Lock, X } from 'lucide-react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import { useUser } from '../Context/CurrentUserIdContext';
 import { useGroup } from '../Context/GroupContext';
 import { getApiUrl, getBaseUrl } from "../Utils/api";
-import { registerDeviceForNotifications, checkNotificationSetup } from '../Utils/firebase';
+import { registerDeviceForNotifications, sendOtp } from '../Utils/firebase';
 
 export function LoginPage() {
   const [userId, setUserId] = useState('');
@@ -14,27 +14,24 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  // Forgot password modal state removed
+
   const { setUserFromToken } = useUser();
   const { fetchAllGroups } = useGroup();
-
   const navigate = useNavigate();
 
-  // Navigation to Signup
   function onSwitchToSignup() {
     navigate('/signup');
   }
 
   function onSuccesLogin(user) {
     console.log('Logged in user:', user);
-   
   }
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setIsLoading(true);
-
-    console.log(getBaseUrl());
 
     if (!userId || !password) {
       setError('Please fill in all fields');
@@ -43,7 +40,6 @@ export function LoginPage() {
     }
 
     try {
-      
       const response = await axios.post(getApiUrl('/auth/login'), {
         userId,
         password,
@@ -54,13 +50,10 @@ export function LoginPage() {
         localStorage.setItem('token', token);
 
         setUserFromToken(); 
-
         const user = jwtDecode(token);
         onSuccesLogin(user);
 
-        // Prompt for notification permission after successful login
         registerDeviceForNotifications(user.userId, fetchAllGroups);
-
         navigate('/');
       } else {
         setError('Login failed. Please try again.');
@@ -77,9 +70,12 @@ export function LoginPage() {
     }
   };
 
+  // Forgot password handler removed
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
+        {/* Login UI */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center mb-4">
             <div className="p-3 bg-gradient-to-r from-blue-600 to-indigo-600 rounded-2xl shadow-lg">
@@ -148,7 +144,7 @@ export function LoginPage() {
             </button>
           </form>
 
-          <div className="mt-6 text-center">
+          <div className="mt-6 text-center space-y-2">
             <p className="text-gray-600">
               Don't have an account?{' '}
               <button
@@ -158,9 +154,13 @@ export function LoginPage() {
                 Sign up
               </button>
             </p>
+
+            {/* Forgot Password button removed */}
           </div>
         </div>
       </div>
+
+  {/* Forgot Password Modal removed */}
     </div>
   );
 }

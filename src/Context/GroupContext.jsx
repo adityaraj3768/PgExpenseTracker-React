@@ -12,21 +12,22 @@ export const GroupProvider = ({ children }) => {
   const [totalExpenses, setTotalExpenses] = useState(0);
   const [balances, setBalances] = useState([]);
   const [currentBalance, setCurrentBalance] = useState(0);
+  const [coins, setCoins] = useState(0);
+  const [monthlyLimit, setMonthlyLimit] = useState(0);
+  const [remainingCoins, setRemainingCoins] = useState(0);
 
   const { currentUserId } = useUser(); // ✅ keep here, but read it in useEffect
    
 
   // Fetch current group data from backend (refreshes the current selected group)
-  const fetchGroup = async () => {
-    if (!currentGroup?.groupCode && !currentGroup?.code && !currentGroup?.id) {
-      console.warn("No current group selected to fetch");
+  const fetchGroup = async (groupParam) => {
+    const groupToFetch = groupParam || currentGroup;
+    if (!groupToFetch?.groupCode && !groupToFetch?.code && !groupToFetch?.id) {
+  // No current group selected to fetch
       return;
     }
-
     try {
       const token = localStorage.getItem("token");
-      
-      // Fetch all groups and find the current one
       const response = await axios.get(
         getApiUrl('/pg/my-groups'),
         {
@@ -35,22 +36,22 @@ export const GroupProvider = ({ children }) => {
           },
         }
       );
-      
-      const groups = Array.isArray(response.data) ? response.data : [response.data];
-      const groupIdentifier = currentGroup.groupCode || currentGroup.code || currentGroup.id;
-      
+  // Fetch group backend response handled
+      const groups = Array.isArray(response.data.groups) ? response.data.groups : [response.data.groups];
+      const groupIdentifier = groupToFetch.groupCode || groupToFetch.code || groupToFetch.id;
       // Find the current group in the list
       const updatedGroup = groups.find(g => 
         g.groupCode === groupIdentifier || g.code === groupIdentifier || g.id === groupIdentifier
       );
-      
       if (updatedGroup) {
         setCurrentGroup(updatedGroup);
+        setMonthlyLimit(response.data.monthlyLimitCoins || 0);
+        setRemainingCoins(response.data.remainingCoins || 0);
       } else {
-        console.warn("Current group not found in user's groups");
+  // Current group not found in user's groups
       }
     } catch (error) {
-      console.error("Error fetching current group:", error);
+  // Error fetching current group
     }
   };
 
@@ -61,16 +62,19 @@ export const GroupProvider = ({ children }) => {
       
       // Fetch all groups that the user belongs to
       const response = await axios.get(
-        getApiUrl('/pg/my-groups'),
+        getApiUrl('/pg/my-groups'), 
         {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         }
       );
+  // Fetch initial group backend response handled
       
-      const groups = Array.isArray(response.data) ? response.data : [response.data];
-      
+  const groups = Array.isArray(response.data.groups) ? response.data.groups : [response.data.groups];
+      setMonthlyLimit(response.data.monthlyLimitCoins || 0);
+      setRemainingCoins(response.data.remainingCoins || 0);
+  
       if (groups.length > 0) {
         // Check if there's a stored group preference
         const storedGroupCode = localStorage.getItem('currentGroupCode');
@@ -90,21 +94,23 @@ export const GroupProvider = ({ children }) => {
         // If no stored group or stored group not found, use the first group
         setCurrentGroupWithStorage(groups[0]);
       } else {
-        console.warn("User is not part of any groups");
+  // User is not part of any groups
         setCurrentGroup(null);
       }
     } catch (error) {
-      console.error("Error fetching initial group:", error);
+  // Error fetching initial group
       setCurrentGroup(null);
     }
   };
 
   // Custom setCurrentGroup that also stores in localStorage
-  const setCurrentGroupWithStorage = (group) => {
+  const setCurrentGroupWithStorage = async (group) => {
     setCurrentGroup(group);
     if (group) {
       const groupCode = group.groupCode || group.code || group.id;
       localStorage.setItem('currentGroupCode', groupCode);
+      // Fetch latest group data (including coins) after selecting group
+      await fetchGroup(group);
     } else {
       localStorage.removeItem('currentGroupCode');
     }
@@ -122,9 +128,9 @@ export const GroupProvider = ({ children }) => {
           },
         }
       );
-      return Array.isArray(response.data) ? response.data : [response.data];
+  return Array.isArray(response.data.groups) ? response.data.groups : [response.data.groups];
     } catch (error) {
-      console.error("Error fetching all groups:", error);
+  // Error fetching all groups
       return [];
     }
   };
@@ -135,16 +141,12 @@ export const GroupProvider = ({ children }) => {
       const users = currentGroup.users || [];
       const expenses = currentGroup.expenses || [];
 
+      // Calculate balances and update state
       const computedBalances = calculateBalances(expenses, users);
       const total = getTotalExpenses(expenses);
       const currentUserBalance = computedBalances.find(
         (b) => b.userId.toString() === currentUserId.toString()
       );
-
-      console.log("currentUserId:", currentUserId);
-      console.log("computedBalances:", computedBalances);
-      console.log("currentUserBalance:", currentUserBalance);
-
       setBalances(computedBalances);
       setTotalExpenses(total);
       setCurrentBalance(currentUserBalance?.totalSpent || 0);
@@ -163,6 +165,12 @@ export const GroupProvider = ({ children }) => {
         fetchGroup,
         fetchAllGroups,
         fetchInitialGroup,
+        coins,
+        setCoins,
+        monthlyLimit,
+        setMonthlyLimit,
+        remainingCoins,
+        setRemainingCoins,
       }}
     >
       {children}

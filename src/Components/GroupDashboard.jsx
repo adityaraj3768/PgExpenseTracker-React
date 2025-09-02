@@ -118,6 +118,13 @@ export function GroupDashboard() {
   const [expenseToDelete, setExpenseToDelete] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // State for previous months expenses
+  const [previousMonthExpenses, setPreviousMonthExpenses] = useState([]);
+  const [loadingPrevious, setLoadingPrevious] = useState(false);
+
+  // Cache for previous months' expenses
+  const [previousMonthsCache, setPreviousMonthsCache] = useState({});
+
   // === DATE INITIALIZATION ===
   // Set default month to previous month for better UX
   const today = new Date();
@@ -244,6 +251,11 @@ export function GroupDashboard() {
   const totalCurrentMonthExpense = useMemo(() => {
     return getTotalExpenses(currentMonthExpenses);
   }, [currentMonthExpenses]);
+
+  // Calculate total for previous month expenses (fetched from backend)
+  const totalPreviousMonthExpense = useMemo(() => {
+    return getTotalExpenses(previousMonthExpenses);
+  }, [previousMonthExpenses]);
 
   // === UTILITY FUNCTIONS ===
 
@@ -395,6 +407,58 @@ export function GroupDashboard() {
     );
   }, [filteredExpenses, currentUserId, currentGroup?.users, getUserExpenses]);
 
+  // Calculate each user's expenses for the selected previous month (from backend)
+  const previousMonthUserExpenses = useMemo(() => {
+    if (!currentGroup?.users || previousMonthExpenses.length === 0) return [];
+    return currentGroup.users.map((user) => {
+      const userExpenses = previousMonthExpenses.filter(
+        (expense) =>
+          expense.paidBy === user.userId ||
+          expense.userId === user.userId ||
+          expense.paidBy === String(user.userId) ||
+          expense.userId === String(user.userId) ||
+          String(expense.paidBy) === String(user.userId) ||
+          String(expense.userId) === String(user.userId) ||
+          (user.name && expense.paidBy === user.name) ||
+          (user.username && expense.paidBy === user.username)
+      );
+      const totalSpent = userExpenses.reduce(
+        (sum, expense) => sum + parseFloat(expense.amount),
+        0
+      );
+      return {
+        userId: user.userId,
+        totalSpent: totalSpent,
+      };
+    });
+  }, [currentGroup?.users, previousMonthExpenses]);
+
+  // Calculate current user's expenses for the selected previous month (from backend)
+  const previousMonthCurrentUserExpense = useMemo(() => {
+    if (!currentGroup?.users || !currentUserId || previousMonthExpenses.length === 0) {
+      return 0;
+    }
+    // Find the current user object
+    const currentUser = currentGroup.users.find(
+      (user) =>
+        user.userId === currentUserId ||
+        user.userId === String(currentUserId) ||
+        String(user.userId) === String(currentUserId)
+    );
+    const userExpenses = previousMonthExpenses.filter(
+      (expense) =>
+        expense.paidBy === currentUserId ||
+        expense.userId === currentUserId ||
+        expense.paidBy === String(currentUserId) ||
+        expense.userId === String(currentUserId) ||
+        String(expense.paidBy) === String(currentUserId) ||
+        String(expense.userId) === String(currentUserId) ||
+        (currentUser && expense.paidBy === currentUser?.name) ||
+        (currentUser && expense.paidBy === currentUser?.username)
+    );
+    return userExpenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0);
+  }, [previousMonthExpenses, currentUserId, currentGroup?.users]);
+
   // === EFFECTS ===
 
   /**
@@ -421,6 +485,40 @@ export function GroupDashboard() {
 
     loadGroupData();
   }, [currentUserId, currentGroup, fetchInitialGroup]);
+
+  // Fetch previous month expenses from backend when tab or month/year changes
+  useEffect(() => {
+    if (activeTab === "previous") {
+      const cacheKey = `${selectedMonth + 1}-${selectedYear}`;
+      if (previousMonthsCache[cacheKey]) {
+        setPreviousMonthExpenses(previousMonthsCache[cacheKey]);
+        return;
+      }
+      const fetchPreviousExpenses = async () => {
+        setLoadingPrevious(true);
+        try {
+          const token = localStorage.getItem("token");
+          const response = await axios.get(getApiUrl(`/pg/my-groups?month=${selectedMonth + 1}&year=${selectedYear}`), {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          // Assume response.data.groups is an array, find current group
+          const groups = response.data.groups;
+          const groupIdentifier = currentGroup?.groupCode || currentGroup?.code || currentGroup?.id;
+          const updatedGroup = Array.isArray(groups)
+            ? groups.find(g => g.groupCode === groupIdentifier || g.code === groupIdentifier || g.id === groupIdentifier)
+            : groups;
+          const expenses = updatedGroup?.expenses || [];
+          setPreviousMonthExpenses(expenses);
+          setPreviousMonthsCache(prev => ({ ...prev, [cacheKey]: expenses }));
+        } catch (err) {
+          setPreviousMonthExpenses([]);
+        } finally {
+          setLoadingPrevious(false);
+        }
+      };
+      fetchPreviousExpenses();
+    }
+  }, [activeTab, selectedMonth, selectedYear, currentGroup, previousMonthsCache]);
 
   // === LOADING AND ERROR STATES ===
 
@@ -630,7 +728,7 @@ export function GroupDashboard() {
                   <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
                   <p className="text-lg sm:text-2xl font-bold text-gray-900 truncate">
                     {activeTab === "previous"
-                      ? totalFilteredExpense.toFixed(2)
+                      ? totalPreviousMonthExpense.toFixed(2)
                       : activeTab === "expenses"
                       ? totalCurrentMonthExpense.toFixed(2)
                       : activeTab === "members"
@@ -668,7 +766,7 @@ export function GroupDashboard() {
                 <p className="text-lg sm:text-2xl font-bold text-green-600 mt-1 truncate">
                   ₹{" "}
                   {activeTab === "previous"
-                    ? currentUserExpense.toFixed(2)
+                    ? previousMonthCurrentUserExpense.toFixed(2)
                     : activeTab === "expenses"
                     ? currentUserCurrentMonthExpense.toFixed(2)
                     : activeTab === "members"
@@ -833,7 +931,7 @@ export function GroupDashboard() {
                 </div>
 
                 {/* Member Expenses Summary for Selected Month */}
-                {filteredUserExpenses.length > 0 && (
+                {activeTab === "previous" && previousMonthExpenses.length > 0 && (
                   <div className="mb-6">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">
                       Member Expenses for{" "}
@@ -847,7 +945,7 @@ export function GroupDashboard() {
                     </h3>
                     <MemberList
                       users={currentGroup.users}
-                      balances={filteredUserExpenses}
+                      balances={previousMonthUserExpenses}
                     />
                   </div>
                 )}
@@ -857,11 +955,15 @@ export function GroupDashboard() {
                   <h3 className="text-lg font-semibold text-gray-900 mb-4">
                     Expense Details
                   </h3>
-                  <ExpenseList
-                    expenses={filteredExpenses}
-                    onExpenseDeleted={handleExpenseDeleted}
-                    onDeleteRequest={handleDeleteRequest}
-                  />
+                  {loadingPrevious ? (
+                    <div className="text-center text-gray-500">Loading expenses...</div>
+                  ) : (
+                    <ExpenseList
+                      expenses={previousMonthExpenses}
+                      onExpenseDeleted={handleExpenseDeleted}
+                      onDeleteRequest={handleDeleteRequest}
+                    />
+                  )}
                 </div>
               </>
             )}

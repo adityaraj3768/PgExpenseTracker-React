@@ -83,12 +83,18 @@ export function LandingPage({
         alert('You must be logged in to enter a group.');
         return;
       }
-
-      const response = await axios.get(getApiUrl('/pg/my-groups'), {
+      // Get current month (0-based, so add 1) and year
+      const now = new Date();
+      const month = now.getMonth() + 1;
+      const year = now.getFullYear();
+      // Fetch only the current month's group data
+      const response = await axios.get(getApiUrl(`/pg/my-groups?month=${month}&year=${year}`), {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
+      // Log the groups received from the backend
+      console.log('Groups received from backend:', response.data.groups);
       //this is the  all groups of the user that he belongs to
       const groups = response.data.groups;
 
@@ -379,9 +385,9 @@ function FeatureCard({ icon, title, description, color }) {
   );
 }
 
-      
 
-      
+
+
 
 
 

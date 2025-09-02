@@ -675,7 +675,7 @@ export function GroupDashboard() {
               const updatedLimit =
                 typeof response.data === "number"
                   ? response.data
-                  : response.data.monthlyLimitCoins ??
+                  : response.data.monthlyLimit ??
                     response.data.monthlyLimit ??
                     response.data.limit ??
                     newLimit;
@@ -932,22 +932,28 @@ export function GroupDashboard() {
 
                 {/* Member Expenses Summary for Selected Month */}
                 {activeTab === "previous" && previousMonthExpenses.length > 0 && (
-                  <div className="mb-6">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4">
-                      Member Expenses for{" "}
-                      {new Date(selectedYear, selectedMonth).toLocaleString(
-                        "default",
-                        {
-                          month: "long",
-                          year: "numeric",
-                        }
-                      )}
-                    </h3>
-                    <MemberList
-                      users={currentGroup.users}
-                      balances={previousMonthUserExpenses}
-                    />
-                  </div>
+                  loadingPrevious ? (
+                    <div className="flex justify-center items-center mb-6">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    </div>
+                  ) : (
+                    <div className="mb-6">
+                      <h3 className="text-lg font-semibold text-gray-900 mb-4">
+                        Member Expenses for{" "}
+                        {new Date(selectedYear, selectedMonth).toLocaleString(
+                          "default",
+                          {
+                            month: "long",
+                            year: "numeric",
+                          }
+                        )}
+                      </h3>
+                      <MemberList
+                        users={currentGroup.users}
+                        balances={previousMonthUserExpenses}
+                      />
+                    </div>
+                  )
                 )}
 
                 {/* Detailed Expense List for Selected Month */}
@@ -956,7 +962,9 @@ export function GroupDashboard() {
                     Expense Details
                   </h3>
                   {loadingPrevious ? (
-                    <div className="text-center text-gray-500">Loading expenses...</div>
+                    <div className="flex justify-center items-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+                    </div>
                   ) : (
                     <ExpenseList
                       expenses={previousMonthExpenses}

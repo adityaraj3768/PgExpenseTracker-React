@@ -12,7 +12,6 @@ import {
   X,
   Copy,
   Check,
-  Pen,
 } from "lucide-react";
 
 // Context and utilities

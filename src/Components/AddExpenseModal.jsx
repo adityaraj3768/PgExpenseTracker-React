@@ -106,7 +106,7 @@ export const AddExpenseModal = ({ isOpen, onClose }) => {
         handleClose();
       } catch (error) {
         // Failed to add expense
-        toast.error('Error adding expense', {
+        toast.error('First set your monthly limit', {
           duration: 2000,
           position: 'top-center',
         });

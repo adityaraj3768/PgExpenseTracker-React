@@ -12,6 +12,7 @@ import {
   X,
   Copy,
   Check,
+  Pencil,
 } from "lucide-react";
 
 // Context and utilities
@@ -112,6 +113,10 @@ export function GroupDashboard() {
   const [showAddExpenses, setShowAddExpenses] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [copySuccess, setCopySuccess] = useState(false);
+  // Group name edit modal state
+  const [showEditGroupName, setShowEditGroupName] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+  const [editingGroupName, setEditingGroupName] = useState(false);
 
   // Delete confirmation modal state
   const [expenseToDelete, setExpenseToDelete] = useState(null);
@@ -558,8 +563,6 @@ export function GroupDashboard() {
 
   // === RENDER ===
 
-  // === RENDER ===
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 relative">
       {/* === HEADER === */}
@@ -572,8 +575,18 @@ export function GroupDashboard() {
                 <Users className="h-6 w-6 text-white" />
               </div>
               <div>
-                <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate max-w-48 sm:max-w-none">
+                <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate max-w-48 sm:max-w-none flex items-center gap-1">
                   {currentGroup.groupName}
+                  <button
+                    className="ml-1 p-1 text-gray-500 hover:text-blue-600 hover:bg-blue-50 rounded transition-colors text-xs"
+                    title="Edit group name"
+                    onClick={() => {
+                      setShowEditGroupName(true);
+                      setNewGroupName(currentGroup.groupName || "");
+                    }}
+                  >
+                    <Pencil size={16} />
+                  </button>
                 </h1>
                 <div className="flex items-center gap-2 mb-1">
                   <p className="text-xs sm:text-sm text-gray-600">
@@ -597,7 +610,7 @@ export function GroupDashboard() {
             {/* Add Expense Button */}
             <button
               onClick={() => setShowAddExpenses(true)}
-              className="flex items-center px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transform hover:scale-[1.02] transition-all"
+              className="flex items-center px-4 py-2 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-lg hover:from-blue-600 hover:to-blue-700 transform hover:scale-[1.02] transition-all text-base"
             >
               <Plus className="h-4 w-4 mr-2" />
               Add Expense
@@ -605,6 +618,87 @@ export function GroupDashboard() {
           </div>
         </div>
       </header>
+
+      {/* Edit Group Name Modal */}
+      {showEditGroupName && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center backdrop-blur-sm bg-black/30">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9, y: 20 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="bg-white shadow-2xl rounded-xl p-6 w-[90%] max-w-md mx-4 border border-gray-200 relative"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold text-gray-900">Edit Group Name</h3>
+              <button
+                onClick={() => setShowEditGroupName(false)}
+                disabled={editingGroupName}
+                className="text-gray-400 hover:text-gray-600 disabled:opacity-50 transition-colors"
+                title="Close"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <input
+              type="text"
+              className="w-full border border-gray-300 rounded px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-200"
+              value={newGroupName}
+              onChange={e => setNewGroupName(e.target.value)}
+              disabled={editingGroupName}
+              placeholder="Enter new group name"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setShowEditGroupName(false)}
+                disabled={editingGroupName}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 disabled:opacity-50 font-medium border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={async () => {
+                  if (!newGroupName.trim()) return;
+                  setEditingGroupName(true);
+                  try {
+                    const token = localStorage.getItem("token");
+                    const response = await axios.post(
+                      getApiUrl("/pg/update-group-name"),
+                      {
+                        newGroupName: newGroupName.trim(),
+                        groupCode: currentGroup.groupCode,
+                      },
+                      { headers: { Authorization: `Bearer ${token}` } }
+                    );
+                    // Update group name in context/state
+                    if (response.data) {
+                      currentGroup.groupName = response.data;
+                      toast.success("Group name updated!");
+                    }
+                    setShowEditGroupName(false);
+                  } catch (err) {
+                    toast.error("Failed to update group name");
+                  } finally {
+                    setEditingGroupName(false);
+                  }
+                }}
+                disabled={editingGroupName || !newGroupName.trim()}
+                className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium transition-colors"
+              >
+                {editingGroupName ? (
+                  <>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                    Saving...
+                  </>
+                ) : (
+                  "Save"
+                )}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
 
       {/* === MAIN CONTENT === */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">

@@ -3,7 +3,7 @@
 import React from 'react';
 import { Users,  Receipt ,IndianRupee} from 'lucide-react';
  
-export const MemberList = ({ users, balances }) => {
+export const MemberList = ({ users, balances, onMemberClick }) => {
 
     
 
@@ -35,7 +35,12 @@ export const MemberList = ({ users, balances }) => {
         const percentage = totalGroupSpending > 0 ? (totalSpent / totalGroupSpending) * 100 : 0;
         
         return (
-          <div key={user.userId} className="bg-white/50 rounded-lg p-6 border border-white/20 hover:bg-white/70 transition-colors">
+          <div
+            key={user.userId}
+            className="bg-white/50 rounded-lg p-6 border border-white/20 hover:bg-white/70 transition-colors cursor-pointer"
+            onClick={() => typeof onMemberClick === 'function' && onMemberClick(user)}
+            title="Click to view expenses"
+          >
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-4">
                 <div className="relative">

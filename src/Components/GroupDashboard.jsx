@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence} from "framer-motion";
 import axios from "axios";
 import { toast } from "react-hot-toast";
 import {
@@ -25,6 +25,93 @@ import { getApiUrl } from "../Utils/api";
 
 import { ExpenseList } from "./ExpenseList";
 import { MemberList } from "./MemberList";
+// Modal for showing member's expenses
+function MemberExpensesModal({ isOpen, onClose, member, expenses }) {
+  if (!isOpen || !member) return null;
+
+  return (
+    <AnimatePresence>
+      <motion.div
+        className="fixed inset-0 z-30 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+      >
+        <motion.div
+          className="bg-gray-900 rounded-2xl shadow-2xl w-full max-w-md mx-3 relative flex flex-col border border-gray-800"
+          style={{ maxHeight: "85vh" }}
+          initial={{ y: 40, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 40, opacity: 0 }}
+          transition={{ type: "spring", stiffness: 260, damping: 20 }}
+        >
+          {/* Header */}
+          <div className="sticky top-0 z-10 bg-gray-900 border-b border-gray-800 flex items-center justify-between px-4 py-3 rounded-t-2xl">
+            <h3 className="text-lg font-bold text-white">
+              {member.name || member.username || member.userId}’s Expenses
+            </h3>
+            <button
+              onClick={onClose}
+              className="text-gray-400 hover:text-gray-200 transition-colors"
+              title="Close"
+            >
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          {/* Expenses list */}
+          <div className="overflow-y-auto px-4 py-3 space-y-3">
+            {expenses.length === 0 ? (
+              <div className="text-center text-gray-500 py-10 text-sm">
+                No expenses found.
+              </div>
+            ) : (
+              [...expenses].reverse().map((expense) => (
+                <motion.div
+                  key={expense.id || expense._id}
+                  className="rounded-xl border border-gray-800 shadow-sm p-4 bg-gradient-to-br from-gray-800/90 to-gray-900/90 hover:shadow-lg hover:shadow-indigo-500/20 transition-all"
+                  whileHover={{ scale: 1.02 }}
+                >
+                  {/* Top row: description + amount */}
+                  <div className="flex justify-between items-start">
+                    <span className="font-semibold text-gray-200 text-base">
+                      {expense.description}
+                    </span>
+                    <span className="font-bold text-green-400 text-sm">
+                      ₹{expense.amount}
+                    </span>
+                  </div>
+
+                  {/* Date */}
+                  <div className="text-xs text-gray-500 mt-1">
+                    {new Date(expense.paymentDate).toLocaleDateString()}
+                  </div>
+
+                  {/* Tags */}
+                  {expense.tags && expense.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {expense.tags.map((tag, idx) => (
+                        <span
+                          key={idx}
+                          className="px-2 py-0.5 bg-indigo-900/50 text-indigo-300 rounded-full text-xs font-medium border border-indigo-700 shadow-sm shadow-indigo-900/40"
+                        >
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </motion.div>
+              ))
+            )}
+          </div>
+
+          {/* Bottom fade effect */}
+          <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-gray-900 to-transparent pointer-events-none rounded-b-2xl"></div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>
+  );
+}
 import { AddExpenseModal } from "./AddExpenseModal";
 import { Coins } from "./Coins";
 
@@ -105,6 +192,9 @@ function CoinsPopup({ isOpen, onClose, onSave, onAddCoins, loading, monthlyLimit
 }
 
 export function GroupDashboard() {
+  // State for member expenses modal
+  const [selectedMember, setSelectedMember] = useState(null);
+  const [selectedMemberExpenses, setSelectedMemberExpenses] = useState([]);
   const { monthlyLimit, setMonthlyLimit, remainingCoins, setRemainingCoins } = useGroup();
   const [showCoinsPopup, setShowCoinsPopup] = useState(false);
   const [savingCoins, setSavingCoins] = useState(false);
@@ -564,7 +654,7 @@ export function GroupDashboard() {
   // === RENDER ===
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 relative">
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 text-gray-900">
       {/* === HEADER === */}
       <header className="bg-white/80 backdrop-blur-sm border-b border-white/20 sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -937,10 +1027,29 @@ export function GroupDashboard() {
                 <MemberList
                   users={currentGroup.users}
                   balances={currentMonthUserExpenses}
+                  onMemberClick={(member) => {
+                    setSelectedMember(member);
+                    // Find expenses for this member for the current month
+                    const memberExpenses = currentMonthExpenses.filter(
+                      (expense) =>
+                        expense.paidBy === member.userId ||
+                        expense.userId === member.userId ||
+                        expense.paidBy === member.name ||
+                        expense.paidBy === member.username
+                    );
+                    setSelectedMemberExpenses(memberExpenses);
+                  }}
                 />
               ) : (
                 <p className="text-center text-gray-500">No members found.</p>
               ))}
+      {/* Member Expenses Modal */}
+      <MemberExpensesModal
+        isOpen={!!selectedMember}
+        onClose={() => setSelectedMember(null)}
+        member={selectedMember}
+        expenses={selectedMemberExpenses}
+      />
 
             {/* Previous Months Content */}
             {activeTab === "previous" && (

@@ -69,31 +69,26 @@ function MemberExpensesModal({ isOpen, onClose, member, expenses }) {
               [...expenses].reverse().map((expense) => (
                 <motion.div
                   key={expense.id || expense._id}
-                  className="rounded-xl border border-gray-800 shadow-sm p-4 bg-gradient-to-br from-gray-800/90 to-gray-900/90 hover:shadow-lg hover:shadow-indigo-500/20 transition-all"
-                  whileHover={{ scale: 1.02 }}
+                  className="rounded-xl border border-gray-800 shadow-sm p-3 bg-gray-800/70 hover:bg-gray-800 hover:shadow-md hover:shadow-indigo-500/20 transition-all"
+                  whileHover={{ scale: 1.01 }}
                 >
-                  {/* Top row: description + amount */}
-                  <div className="flex justify-between items-start">
-                    <span className="font-semibold text-gray-200 text-base">
+                  <div className="flex justify-between items-center">
+                    <span className="font-medium text-gray-200">
                       {expense.description}
                     </span>
-                    <span className="font-bold text-green-400 text-sm">
+                    <span className="font-semibold text-green-400">
                       ₹{expense.amount}
                     </span>
                   </div>
-
-                  {/* Date */}
-                  <div className="text-xs text-gray-500 mt-1">
-                    {new Date(expense.paymentDate).toLocaleDateString()}
+                  <div className="flex justify-between items-center mt-1 text-xs text-gray-500">
+                    <span>{new Date(expense.paymentDate).toLocaleDateString()}</span>
                   </div>
-
-                  {/* Tags */}
                   {expense.tags && expense.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-2">
+                    <div className="flex flex-wrap gap-1 mt-2">
                       {expense.tags.map((tag, idx) => (
                         <span
                           key={idx}
-                          className="px-2 py-0.5 bg-indigo-900/50 text-indigo-300 rounded-full text-xs font-medium border border-indigo-700 shadow-sm shadow-indigo-900/40"
+                          className="px-2 py-0.5 bg-indigo-900/50 text-indigo-300 rounded-full text-xs font-medium border border-indigo-800"
                         >
                           #{tag}
                         </span>
@@ -112,6 +107,8 @@ function MemberExpensesModal({ isOpen, onClose, member, expenses }) {
     </AnimatePresence>
   );
 }
+
+
 import { AddExpenseModal } from "./AddExpenseModal";
 import { Coins } from "./Coins";
 
@@ -195,7 +192,7 @@ export function GroupDashboard() {
   // State for member expenses modal
   const [selectedMember, setSelectedMember] = useState(null);
   const [selectedMemberExpenses, setSelectedMemberExpenses] = useState([]);
-  const { monthlyLimit, setMonthlyLimit, remainingCoins, setRemainingCoins } = useGroup();
+  const { monthlyLimit, setMonthlyLimit, remainingCoins, setRemainingCoins, setCurrentGroup, setTotalExpenses } = useGroup();
   const [showCoinsPopup, setShowCoinsPopup] = useState(false);
   const [savingCoins, setSavingCoins] = useState(false);
   // === STATE MANAGEMENT ===
@@ -266,14 +263,28 @@ export function GroupDashboard() {
    * Called after successful deletion to update all calculations
    */
   const handleExpenseDeleted = useCallback(
-    async (deletedExpenseId) => {
-      try {
-        await fetchGroup();
-      } catch (error) {
-  // Error refreshing group data after deletion
+    (deletedExpenseId, backendData) => {
+      // Remove the deleted expense from local state
+      if (setCurrentGroup && currentGroup) {
+        setCurrentGroup({
+          ...currentGroup,
+          expenses: (currentGroup.expenses || []).filter(
+            (exp) => exp.id !== deletedExpenseId && exp._id !== deletedExpenseId
+          ),
+        });
+      }
+      // Update totals and coins if backend returns them
+      if (setTotalExpenses && backendData?.user?.totalExpenses !== undefined) {
+        setTotalExpenses(backendData.user.totalExpenses);
+      }
+      if (setRemainingCoins && backendData?.user?.remainingCoins !== undefined) {
+        setRemainingCoins(backendData.user.remainingCoins);
+      }
+      if (setMonthlyLimit && backendData?.user?.monthlyLimitCoins !== undefined) {
+        setMonthlyLimit(backendData.user.monthlyLimitCoins);
       }
     },
-    [fetchGroup]
+    [setCurrentGroup, currentGroup, setTotalExpenses, setRemainingCoins, setMonthlyLimit]
   );
 
   /**
@@ -293,9 +304,10 @@ export function GroupDashboard() {
     setIsDeleting(true);
 
     try {
-      await axios.delete(getApiUrl(`/pg/delete/expense/${expenseId}`), {
+      const response = await axios.delete(getApiUrl(`/pg/delete/expense/${expenseId}`), {
         headers: { Authorization: `Bearer ${token}` },
       });
+      const data = response.data;
 
       toast.success("Expense deleted successfully!", {
         duration: 3000,
@@ -303,7 +315,7 @@ export function GroupDashboard() {
       });
 
       setExpenseToDelete(null);
-      await handleExpenseDeleted(expenseId);
+      handleExpenseDeleted(expenseId, data);
     } catch (error) {
       const errorMessage =
         error.response?.data?.message || "Something went wrong";

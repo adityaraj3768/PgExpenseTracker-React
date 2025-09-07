@@ -1,6 +1,15 @@
 import { useState, useEffect } from "react";
-import axios from 'axios';
-import { IndianRupee, X, Plus, Tag, Calendar, Hash, Users, Check } from "lucide-react";
+import axios from "axios";
+import {
+  IndianRupee,
+  X,
+  Plus,
+  Tag,
+  Calendar,
+  Hash,
+  Users,
+  Check,
+} from "lucide-react";
 import { useGroup } from "../Context/GroupContext";
 import { getApiUrl } from "../Utils/api";
 import { toast } from "react-hot-toast";
@@ -14,30 +23,71 @@ export const AddExpenseModal = ({ isOpen, onClose }) => {
   const [allGroups, setAllGroups] = useState([]);
   const [selectedGroupsForExpense, setSelectedGroupsForExpense] = useState([]);
   const [isLoadingGroups, setIsLoadingGroups] = useState(false);
-  
-  const { fetchGroup, currentGroup, fetchAllGroups: contextFetchAllGroups } = useGroup();
 
- const commonTags = [
-  // 🍴 Food & Snacks
-  "canteen", "mess", "maggi", "chai", "coffee", "snacks",
-  "pizza", "burger", "cold drink", "fast food",
+  const {
+  currentGroup,
+  fetchAllGroups: contextFetchAllGroups,
+  remainingCoins,
+  setCurrentGroup,
+  setTotalExpenses,
+  setRemainingCoins,
+  setMonthlyLimit,
+  } = useGroup();
 
-  // 🏠 Hostel / PG Essentials
-  "rent", "electricity", "water", "laundry", "cleaning",
+  const commonTags = [
+    // 🍴 Food & Snacks
+    "canteen",
+    "mess",
+    "maggi",
+    "chai",
+    "coffee",
+    "snacks",
+    "pizza",
+    "burger",
+    "cold drink",
+    "fast food",
 
-  // 📚 Study & College Stuff
-  "stationery", "books", "photocopy", "printing", "exam fees",
+    // 🏠 Hostel / PG Essentials
+    "rent",
+    "electricity",
+    "water",
+    "laundry",
+    "cleaning",
 
-  // 🚌 Travel
-  "bus", "auto", "cab", "fuel", "metro",
+    // 📚 Study & College Stuff
+    "stationery",
+    "books",
+    "photocopy",
+    "printing",
+    "exam fees",
 
-  // 🎉 Lifestyle & Fun
-  "movie", "outing", "party", "gaming", "subscription",
+    // 🚌 Travel
+    "bus",
+    "auto",
+    "cab",
+    "fuel",
+    "metro",
 
-  // 🛒 Household / Groceries (your original list)
-  "grocery", "vegetables", "fruits", "bread", "paneer", "milk",
-  "gas", "rice", "dal", "atta", "others"
-];
+    // 🎉 Lifestyle & Fun
+    "movie",
+    "outing",
+    "party",
+    "gaming",
+    "subscription",
+
+    // 🛒 Household / Groceries (your original list)
+    "grocery",
+    "vegetables",
+    "fruits",
+    "bread",
+    "paneer",
+    "milk",
+    "gas",
+    "rice",
+    "dal",
+    "atta",
+    "others",
+  ];
 
   // Helper function to get group ID
   const getGroupId = (group) => group?.groupCode || group?.code || group?.id;
@@ -71,52 +121,85 @@ export const AddExpenseModal = ({ isOpen, onClose }) => {
     e.preventDefault();
     setIsLoading(true);
 
+    // Check if user has enough coins before proceeding
+    if (parseFloat(amount) > remainingCoins) {
+      toast.error('Please add some coins to add this expense.', {
+        duration: 2500,
+        position: 'top-center',
+      });
+      setIsLoading(false);
+      return;
+    }
     if (amount && tags.length > 0 && selectedDate && currentGroup) {
       const groupCodes = [
         getGroupId(currentGroup),
-        ...selectedGroupsForExpense.map(group => getGroupId(group))
+        ...selectedGroupsForExpense.map((group) => getGroupId(group)),
       ];
 
       const expense = {
         amount: Math.round(parseFloat(amount) * 100) / 100,
         paymentDate: selectedDate,
-        tags: tags.filter(tag => tag.trim() !== ''),
-        groupCodes: groupCodes
+        tags: tags.filter((tag) => tag.trim() !== ""),
+        groupCodes: groupCodes,
       };
 
       try {
-        const token = localStorage.getItem('token');
-        
-        await axios.post(
-          getApiUrl('/pg/addExpenseToGroups'),
+        const token = localStorage.getItem("token");
+
+        const response = await axios.post(
+          getApiUrl("/pg/addExpenseToGroups"),
           expense,
           {
             headers: {
-              Authorization: `Bearer ${token}`
-            }
+              Authorization: `Bearer ${token}`,
+            },
           }
         );
-
-        await fetchGroup();
+        const data = response.data;
+        // Update expense list in currentGroup
+        if (setCurrentGroup && currentGroup) {
+          setCurrentGroup({
+            ...currentGroup,
+            expenses: [...(currentGroup.expenses || []), {
+              amount: data.amount,
+              tags: data.tags,
+              paymentDate: data.paymentDate,
+              paidBy: data.paidBy,
+              // add any other fields you want to display
+            }],
+          });
+        }
+        // Update total amount
+        if (setTotalExpenses && typeof data.user?.totalExpenses !== "undefined") {
+          setTotalExpenses(data.user.totalExpenses);
+        }
+        // Update remaining coins
+        if (setRemainingCoins && typeof data.user?.remainingCoins !== "undefined") {
+          setRemainingCoins(data.user.remainingCoins);
+        }
+        // Update monthly limit
+        if (setMonthlyLimit && typeof data.user?.monthlyLimitCoins !== "undefined") {
+          setMonthlyLimit(data.user.monthlyLimitCoins);
+        }
         const totalGroups = groupCodes.length;
         toast.success(`Expense added successfully !`, {
           duration: 2000,
-          position: 'top-center',
+          position: "top-center",
         });
         handleClose();
       } catch (error) {
         // Failed to add expense
-        toast.error('First set your monthly limit', {
+        toast.error("First set your monthly limit", {
           duration: 2000,
-          position: 'top-center',
+          position: "top-center",
         });
       } finally {
         setIsLoading(false);
       }
     } else if (!currentGroup) {
-      toast.error('No group selected. Please select a group first.', {
+      toast.error("No group selected. Please select a group first.", {
         duration: 3000,
-        position: 'top-center',
+        position: "top-center",
       });
       setIsLoading(false);
     }
@@ -135,12 +218,16 @@ export const AddExpenseModal = ({ isOpen, onClose }) => {
 
   const toggleGroupSelection = (group) => {
     const groupId = getGroupId(group);
-    
-    setSelectedGroupsForExpense(prev => {
-      const isSelected = prev.some(selectedGroup => getGroupId(selectedGroup) === groupId);
-      
+
+    setSelectedGroupsForExpense((prev) => {
+      const isSelected = prev.some(
+        (selectedGroup) => getGroupId(selectedGroup) === groupId
+      );
+
       if (isSelected) {
-        return prev.filter(selectedGroup => getGroupId(selectedGroup) !== groupId);
+        return prev.filter(
+          (selectedGroup) => getGroupId(selectedGroup) !== groupId
+        );
       } else {
         return [...prev, group];
       }
@@ -156,7 +243,7 @@ export const AddExpenseModal = ({ isOpen, onClose }) => {
   };
 
   const removeTag = (tagToRemove) => {
-    setTags(tags.filter(tag => tag !== tagToRemove));
+    setTags(tags.filter((tag) => tag !== tagToRemove));
   };
 
   const handleNewTagKeyPress = (e) => {
@@ -167,7 +254,7 @@ export const AddExpenseModal = ({ isOpen, onClose }) => {
   };
 
   const suggestedTags = commonTags
-    .filter(tag => !tags.includes(tag) && tag.includes(newTag.toLowerCase()))
+    .filter((tag) => !tags.includes(tag) && tag.includes(newTag.toLowerCase()))
     .slice(0, 8);
 
   if (!isOpen) return null;
@@ -182,17 +269,26 @@ export const AddExpenseModal = ({ isOpen, onClose }) => {
             {currentGroup && (
               <div className="text-sm text-gray-600 mt-1">
                 <p>
-                  Adding to: <span className="font-medium text-blue-600">{currentGroup.groupName || currentGroup.name || 'Current Group'}</span>
+                  Adding to:{" "}
+                  <span className="font-medium text-blue-600">
+                    {currentGroup.groupName ||
+                      currentGroup.name ||
+                      "Current Group"}
+                  </span>
                 </p>
                 {selectedGroupsForExpense.length > 0 && (
                   <p className="text-xs text-green-600 mt-1">
-                    + {selectedGroupsForExpense.length} additional group{selectedGroupsForExpense.length > 1 ? 's' : ''}
+                    + {selectedGroupsForExpense.length} additional group
+                    {selectedGroupsForExpense.length > 1 ? "s" : ""}
                   </p>
                 )}
               </div>
             )}
           </div>
-          <button onClick={handleClose} className="p-2 hover:bg-gray-100 rounded-full">
+          <button
+            onClick={handleClose}
+            className="p-2 hover:bg-gray-100 rounded-full"
+          >
             <X className="h-5 w-5 text-gray-500" />
           </button>
         </div>
@@ -202,174 +298,188 @@ export const AddExpenseModal = ({ isOpen, onClose }) => {
           {/* Form */}
           <form onSubmit={handleSubmit} className="p-6 space-y-6">
             {/* Amount */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <IndianRupee className="h-4 w-4 inline mr-1" />
-              Amount
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-lg"
-              placeholder="0.00"
-              required
-            />
-          </div>
-
-          {/* Tags */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Hash className="h-4 w-4 inline mr-1" />
-              Tags
-            </label>
-
-            {tags.length > 0 && (
-              <div className="flex flex-wrap gap-2 mb-3">
-                {tags.map((tag) => (
-                  <span key={tag} className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800">
-                    <strong>{tag}</strong>
-                    <button
-                      type="button"
-                      onClick={() => removeTag(tag)}
-                      className="ml-2 hover:text-blue-600"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-
-            <div className="relative">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <IndianRupee className="h-4 w-4 inline mr-1" />
+                Amount
+              </label>
               <input
-                type="text"
-                value={newTag}
-                onChange={(e) => setNewTag(e.target.value)}
-                onKeyPress={handleNewTagKeyPress}
-                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                placeholder="Add tags (e.g., grocery, milk)"
+                type="number"
+                step="0.01"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-lg"
+                placeholder="0.00"
+                required
               />
-              {newTag && (
-                <button
-                  type="button"
-                  onClick={() => addTag(newTag)}
-                  className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 text-blue-600 hover:text-blue-700"
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
-              )}
             </div>
+            {/* Tags */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <Hash className="h-4 w-4 inline mr-1" />
+                Tags
+              </label>
 
-            {suggestedTags.length > 0 && (
-              <div className="mt-3">
-                <p className="text-xs text-gray-600 mb-2">Suggested tags:</p>
-                <div className="flex flex-wrap gap-2">
-                  {suggestedTags.map((tag) => (
-                    <button
+              {tags.length > 0 && (
+                <div className="flex flex-wrap gap-2 mb-3">
+                  {tags.map((tag) => (
+                    <span
                       key={tag}
-                      type="button"
-                      onClick={() => addTag(tag)}
-                      className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200"
+                      className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800"
                     >
-                      {tag}
-                    </button>
+                      <strong>{tag}</strong>
+                      <button
+                        type="button"
+                        onClick={() => removeTag(tag)}
+                        className="ml-2 hover:text-blue-600"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
                   ))}
                 </div>
+              )}
+
+              <div className="relative">
+                <input
+                  type="text"
+                  value={newTag}
+                  onChange={(e) => setNewTag(e.target.value)}
+                  onKeyPress={handleNewTagKeyPress}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Add tags (e.g., grocery, milk)"
+                />
+                {newTag && (
+                  <button
+                    type="button"
+                    onClick={() => addTag(newTag)}
+                    className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 text-blue-600 hover:text-blue-700"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                )}
               </div>
-            )}
-          </div>
 
-          {/* Date */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              <Calendar className="h-4 w-4 inline mr-1" />
-              Date
-            </label>
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-              required
-            />
-          </div>
-
-          {/* Additional Groups Selection */}
-          {(allGroups.length > 1 || isLoadingGroups) && (
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-3">
-                <Users className="h-4 w-4 inline mr-1" />
-                Want to add this expense to more groups?
-              </label>
-              
-              {isLoadingGroups ? (
-                <div className="flex items-center space-x-2 text-sm text-gray-500">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-                  <span>Loading groups...</span>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {(() => {
-                    const currentGroupId = getGroupId(currentGroup);
-                    const otherGroups = allGroups.filter(group => getGroupId(group) !== currentGroupId);
-
-                    if (otherGroups.length === 0) {
-                      return <div className="text-sm text-gray-500">No other groups available</div>;
-                    }
-
-                    return (
-                      <div className="flex flex-wrap gap-2">
-                        {otherGroups.map((group) => {
-                          const groupId = getGroupId(group);
-                          const isSelected = selectedGroupsForExpense.some(selectedGroup => 
-                            getGroupId(selectedGroup) === groupId
-                          );
-                          
-                          return (
-                            <button
-                              key={groupId}
-                              type="button"
-                              onClick={() => toggleGroupSelection(group)}
-                              className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                                isSelected 
-                                  ? 'bg-blue-100 text-blue-800 border border-blue-300' 
-                                  : 'bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200'
-                              }`}
-                            >
-                              {isSelected && (
-                                <Check className="h-3 w-3 mr-1" />
-                              )}
-                              {group.groupName || group.name || 'Unnamed Group'}
-                            </button>
-                          );
-                        })}
-                      </div>
-                    );
-                  })()}
+              {suggestedTags.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-xs text-gray-600 mb-2">Suggested tags:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {suggestedTags.map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => addTag(tag)}
+                        className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200"
+                      >
+                        {tag}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
-          )}          {/* Buttons */}
-          <div className="flex space-x-3 pt-4">
-            <button
-              type="button"
-              onClick={handleClose}
-              className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-              disabled={isLoading}
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              disabled={!amount || tags.length === 0 || !currentGroup || isLoading}
-              className={`flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-3 rounded-lg hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 ${isLoading ? 'cursor-not-allowed' : ''}`}
-            >
-              {isLoading ? "Adding..." : "Add Expense"}
-            </button>
-          </div>
-        </form>
+            {/* Date */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                <Calendar className="h-4 w-4 inline mr-1" />
+                Date
+              </label>
+              <input
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+            {/* Additional Groups Selection */}
+            {(allGroups.length > 1 || isLoadingGroups) && (
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-3">
+                  <Users className="h-4 w-4 inline mr-1" />
+                  Want to add this expense to more groups?
+                </label>
+
+                {isLoadingGroups ? (
+                  <div className="flex items-center space-x-2 text-sm text-gray-500">
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    <span>Loading groups...</span>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {(() => {
+                      const currentGroupId = getGroupId(currentGroup);
+                      const otherGroups = allGroups.filter(
+                        (group) => getGroupId(group) !== currentGroupId
+                      );
+
+                      if (otherGroups.length === 0) {
+                        return (
+                          <div className="text-sm text-gray-500">
+                            No other groups available
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="flex flex-wrap gap-2">
+                          {otherGroups.map((group) => {
+                            const groupId = getGroupId(group);
+                            const isSelected = selectedGroupsForExpense.some(
+                              (selectedGroup) =>
+                                getGroupId(selectedGroup) === groupId
+                            );
+
+                            return (
+                              <button
+                                key={groupId}
+                                type="button"
+                                onClick={() => toggleGroupSelection(group)}
+                                className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+                                  isSelected
+                                    ? "bg-blue-100 text-blue-800 border border-blue-300"
+                                    : "bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200"
+                                }`}
+                              >
+                                {isSelected && (
+                                  <Check className="h-3 w-3 mr-1" />
+                                )}
+                                {group.groupName ||
+                                  group.name ||
+                                  "Unnamed Group"}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                )}
+              </div>
+            )}{" "}
+            {/* Buttons */}
+            <div className="flex space-x-3 pt-4">
+              <button
+                type="button"
+                onClick={handleClose}
+                className="flex-1 px-4 py-3 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                disabled={isLoading}
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={
+                  !amount || tags.length === 0 || !currentGroup || isLoading
+                }
+                className={`flex-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white px-4 py-3 rounded-lg hover:from-blue-600 hover:to-blue-700 disabled:opacity-50 ${
+                  isLoading ? "cursor-not-allowed" : ""
+                }`}
+              >
+                {isLoading ? "Adding..." : "Add Expense"}
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>

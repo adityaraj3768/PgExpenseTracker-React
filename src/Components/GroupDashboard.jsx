@@ -13,7 +13,10 @@ import {
   Copy,
   Check,
   Pencil,
+  ArrowLeftRight,
 } from "lucide-react";
+import { useNavigate } from 'react-router-dom';
+import { useSpring, animated } from 'react-spring';
 
 // Context and utilities
 import { useGroup } from "../Context/GroupContext";
@@ -191,6 +194,7 @@ function CoinsPopup({ isOpen, onClose, onSave, onAddCoins, loading, monthlyLimit
 export function GroupDashboard() {
   // State for member expenses modal
   const [selectedMember, setSelectedMember] = useState(null);
+  const navigate = useNavigate();
   const [selectedMemberExpenses, setSelectedMemberExpenses] = useState([]);
   const { monthlyLimit, setMonthlyLimit, remainingCoins, setRemainingCoins, setCurrentGroup, setTotalExpenses } = useGroup();
   const [showCoinsPopup, setShowCoinsPopup] = useState(false);
@@ -362,6 +366,22 @@ export function GroupDashboard() {
   const totalPreviousMonthExpense = useMemo(() => {
     return getTotalExpenses(previousMonthExpenses);
   }, [previousMonthExpenses]);
+
+  // === ANIMATED TOTAL EXPENSE ===
+  const animatedTotal = useSpring({
+    from: { number: 0 },
+    to: { number: (
+      activeTab === "previous"
+        ? totalPreviousMonthExpense
+        : activeTab === "expenses"
+        ? totalCurrentMonthExpense
+        : activeTab === "members"
+        ? totalCurrentMonthExpense
+        : totalExpense
+    ) },
+    config: { duration: 900 }, // Faster animation
+    reset: true,
+  });
 
   // === UTILITY FUNCTIONS ===
 
@@ -921,33 +941,41 @@ export function GroupDashboard() {
                 </p>
                 <div className="flex items-center gap-1 sm:gap-2 mt-1">
                   <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
-                  <p className="text-lg sm:text-2xl font-bold text-gray-900 truncate">
-                    {activeTab === "previous"
-                      ? totalPreviousMonthExpense.toFixed(2)
-                      : activeTab === "expenses"
-                      ? totalCurrentMonthExpense.toFixed(2)
-                      : activeTab === "members"
-                      ? totalCurrentMonthExpense.toFixed(2)
-                      : totalExpense.toFixed(2)}
-                  </p>
+                  <animated.p className="text-lg sm:text-2xl font-bold text-gray-900 truncate">
+                    {animatedTotal.number.to(n => n.toFixed(2))}
+                  </animated.p>
                 </div>
               </div>
               <TrendingUp className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600 flex-shrink-0" />
             </div>
           </div>
 
-          {/* Total Members Card */}
-          <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-4 sm:p-6 shadow-lg border border-white/20">
-            <div className="flex items-center justify-between">
-              <div className="flex-1 min-w-0">
-                <p className="text-xs sm:text-sm text-gray-600">
-                  Total Members
-                </p>
-                <p className="text-lg sm:text-2xl font-bold text-gray-900 mt-1">
-                  {currentGroup.users?.length || 0}
-                </p>
+
+          {/* Total Members & Give/Take Cards Row */}
+          <div className="grid grid-cols-2 gap-4">
+            {/* Total Members Card (Half Width) */}
+            <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-4 sm:p-6 shadow-lg border border-white/20 flex flex-col justify-between cursor-default">
+              <div className="flex items-center justify-between">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs sm:text-sm text-gray-600">Total Members</p>
+                  <p className="text-lg sm:text-2xl font-bold text-gray-900 mt-1">{currentGroup.users?.length || 0}</p>
+                </div>
+                <Users className="h-6 w-6 sm:h-8 sm:w-8 text-indigo-600 flex-shrink-0" />
               </div>
-              <Users className="h-6 w-6 sm:h-8 sm:w-8 text-indigo-600 flex-shrink-0" />
+            </div>
+            {/* Give/Take Card (Half Width, Clickable) */}
+            <div
+              className="bg-white/70 backdrop-blur-sm rounded-2xl p-4 sm:p-6 shadow-lg border border-white/20 flex flex-col justify-between cursor-pointer hover:shadow-indigo-200 hover:scale-[1.03] transition-transform"
+              onClick={() => navigate('/give-take-dashboard')}
+              title="Go to Give & Take Dashboard"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs sm:text-sm text-gray-600">Give/Take</p>
+                  <p className="text-lg sm:text-2xl font-bold text-blue-700 mt-1">Track Now</p>
+                </div>
+                <ArrowLeftRight className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600 flex-shrink-0" />
+              </div>
             </div>
           </div>
 
@@ -1018,7 +1046,7 @@ export function GroupDashboard() {
               >
                 Previous Months
               </button>
-            </div>
+              </div>
           </nav>
 
           {/* Tab Content */}

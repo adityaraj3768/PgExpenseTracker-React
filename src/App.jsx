@@ -6,6 +6,7 @@ import { LoginPage } from "./Components/LoginPage";
 import { LandingPage } from "./Components/LandingPage";
 import { GroupProvider } from "./Context/GroupContext";
 import { GroupDashboard } from "./Components/GroupDashboard";
+import GiveTakeDashboard from "./Components/GiveTakeDashboard";
 import { UserProvider } from "./Context/CurrentUserIdContext";
 
 function App() {
@@ -22,6 +23,7 @@ function App() {
                 <Route path="/login" element={<LoginPage />} />
                 <Route path="/signup" element={<SignUpPage />} />
                 <Route path="/dashboard" element={<GroupDashboard />} />
+                <Route path="/give-take-dashboard" element={<GiveTakeDashboard />} />
               </Routes>
             </Router>
           </GroupProvider>

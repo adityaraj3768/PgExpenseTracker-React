@@ -106,18 +106,23 @@ export const ExpenseList = ({ expenses, onExpenseDeleted, onDeleteRequest }) => 
                   <h3 className="text-lg font-medium text-gray-900">
                     {expense.description}
                   </h3>
-                  <p className="text-sm text-gray-600">
-                    Paid by {expense.paidBy}
+                  <p className="text-sm text-gray-700 font-normal">
+                    Paid by <span className="font-normal text-gray-700">{expense.paidBy}</span>
                   </p>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {expense.paymentDate}
+                  <p className="text-sm text-gray-700 font-normal mt-1">
+                    {(() => {
+                      const formatted = formatExpenseDateWithTime(expense.paymentDate, expense.createdAt);
+                      if (!formatted.includes(", ")) return <span className="font-normal text-gray-700">{formatted}</span>;
+                      const [datePart, timePart] = formatted.split(", ");
+                      return <><span className="font-normal text-gray-700">{datePart}</span>, <span className="font-normal text-gray-700">{timePart}</span></>;
+                    })()}
                   </p>
                   {expense.tags?.length > 0 && (
                     <div className="mt-2 flex flex-wrap gap-1">
                       {expense.tags.map((tag, tagIndex) => (
                         <span
-                          key={`${expense.id}-tag-${tagIndex}`} // ✅ safe & unique
-                          className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-black-700 font-semibold"
+                          key={`${expense.id}-tag-${tagIndex}`}
+                          className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-black font-normal"
                         >
                           <Hash className="h-3 w-3 mr-1" />
                           {tag}
@@ -151,5 +156,28 @@ export const ExpenseList = ({ expenses, onExpenseDeleted, onDeleteRequest }) => 
         ))}
       </AnimatePresence>
     </div>
+
   );
 };
+
+// Format date as '24 Aug, 7:02 AM' if this year, or '24 Aug 2024, 7:02 AM' if previous year
+function formatExpenseDateWithTime(paymentDateStr, createdAtStr) {
+  if (!paymentDateStr) return "-";
+  const date = new Date(paymentDateStr);
+  if (isNaN(date.getTime())) return paymentDateStr;
+  const now = new Date();
+  const day = date.getDate();
+  const month = date.toLocaleString('default', { month: 'short' });
+  const year = date.getFullYear();
+  const currentYear = now.getFullYear();
+  // Format time from createdAt
+  let time = "";
+  if (createdAtStr) {
+    const createdAtDate = new Date(createdAtStr);
+    if (!isNaN(createdAtDate.getTime())) {
+      time = createdAtDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+    }
+  }
+  const datePart = year === currentYear ? `${day} ${month}` : `${day} ${month} ${year}`;
+  return time ? `${datePart}, ${time}` : datePart;
+}

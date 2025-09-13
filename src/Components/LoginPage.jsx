@@ -14,7 +14,18 @@ export function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  // Forgot password modal state removed
+  // Forgot password modal state
+  const [showForgotModal, setShowForgotModal] = useState(false);
+  const [forgotUserId, setForgotUserId] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [otp, setOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [forgotError, setForgotError] = useState('');
+  const [forgotLoading, setForgotLoading] = useState(false);
+  const [otpLoading, setOtpLoading] = useState(false);
+
+  const [confirmationResult, setConfirmationResult] = useState(null);
+
 
   const { setUserFromToken } = useUser();
   const { fetchAllGroups } = useGroup();
@@ -70,7 +81,169 @@ export function LoginPage() {
     }
   };
 
-  // Forgot password handler removed
+  // Forgot password handlers
+const handleSendOtp = async () => {
+  setForgotError('');
+  setOtpLoading(true);
+
+  try {
+    // ✅ 1. Verify user exists by calling backend (raw number, no +91)
+    await axios.post(getApiUrl('/auth/forgot-password'), { mobile: forgotUserId });
+
+    // ✅ 2. Convert only for Firebase OTP
+    const formattedPhone = `+91${forgotUserId}`;
+
+    console.log('Formatted phone for OTP:', formattedPhone);
+
+    // ✅ 3. Send OTP via Firebase
+    await sendOtp(formattedPhone,setConfirmationResult);
+
+    setOtpSent(true);
+    toast.success("OTP sent successfully!");
+  } catch (err) {
+    console.error("❌ OTP error:", err);
+    if (err.response?.data?.message) {
+      setForgotError(err.response.data.message);
+    } else if (err.message) {
+      setForgotError(err.message);
+    } else {
+      setForgotError('Failed to send OTP. Please try again.');
+    }
+  } finally {
+    setOtpLoading(false);
+  }
+};
+
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    setForgotError('');
+    setForgotLoading(true);
+    console.log(confirmationResult.verificationId)
+    try {
+      // Call your backend API to reset password
+      await axios.post(getApiUrl('/auth/reset-password'), {
+        firebaseIdToken: confirmationResult.verificationId,
+        userId: forgotUserId,
+        newPassword,
+      });
+
+
+      setShowForgotModal(false);
+      setOtpSent(false);
+      setForgotUserId('');
+      setOtp('');
+      setNewPassword('');
+      setForgotError('');
+      alert('Password reset successful. Please login with your new password.');
+    } catch (err) {
+      setForgotError('Failed to reset password. Please check OTP and try again.');
+    } finally {
+      setForgotLoading(false);
+    }
+  };
+
+  // Forgot Password Step State
+  const [forgotStep, setForgotStep] = useState(1);
+
+  // Helper to reset forgot password modal state
+  function resetForgotModal() {
+    setShowForgotModal(false);
+    setOtpSent(false);
+    setForgotUserId('');
+    setOtp('');
+    setNewPassword('');
+    setForgotError('');
+    setForgotLoading(false);
+    setOtpLoading(false);
+    setForgotStep(1);
+    setConfirmationResult(null);
+  }
+
+  // Step 1: Send OTP
+  const handleSendOtpStep = async () => {
+    setForgotError('');
+    setOtpLoading(true);
+
+    try {
+      // 1. Verify user exists by calling backend (raw number, no +91)
+      await axios.post(getApiUrl('/auth/forgot-password'), { mobile: forgotUserId });
+
+      // 2. Convert only for Firebase OTP
+      const formattedPhone = `+91${forgotUserId}`;
+
+      // 3. Send OTP via Firebase (setupRecaptcha is called inside sendOtp)
+      await sendOtp(formattedPhone, setConfirmationResult);
+
+      setOtpSent(true);
+      setForgotStep(2);
+      // toast.success("OTP sent successfully!"); // Uncomment if using toast
+    } catch (err) {
+      if (err.response?.data?.message) {
+        setForgotError(err.response.data.message);
+      } else if (err.message) {
+        setForgotError(err.message);
+      } else {
+        setForgotError('Failed to send OTP. Please try again.');
+      }
+    } finally {
+      setOtpLoading(false);
+    }
+  };
+
+  // Step 2: Verify OTP
+const handleVerifyOtpStep = async (e) => {
+  e.preventDefault();
+  setForgotError('');
+  setForgotLoading(true);
+
+  try {
+    if (!confirmationResult) throw new Error("OTP not sent or expired.");
+
+    // Confirm OTP with Firebase
+    const result = await confirmationResult.confirm(otp);
+    if (result.user) {
+      // ✅ get Firebase ID token
+      const idToken = await result.user.getIdToken();
+      // Save for Step 3
+      setConfirmationResult({ ...confirmationResult, idToken });
+      setForgotStep(3);
+    } else {
+      setForgotError("Invalid OTP. Please try again.");
+    }
+  } catch (err) {
+    console.error("OTP verification error:", err);
+    setForgotError('Invalid OTP. Please try again.');
+  } finally {
+    setForgotLoading(false);
+  }
+};
+
+  // Step 3: Reset Password
+// Step 3: Reset Password
+const handleResetPasswordStep = async (e) => {
+  e.preventDefault();
+  setForgotError('');
+  setForgotLoading(true);
+
+  try {
+    if (!confirmationResult?.idToken) throw new Error("No Firebase token available.");
+
+    await axios.post(getApiUrl('/auth/reset-password'), {
+      firebaseIdToken: confirmationResult.idToken, // ✅ send actual ID Token
+      newPassword,
+    });
+
+    resetForgotModal();
+    alert('Password reset successful. Please login with your new password.');
+  } catch (err) {
+    console.error("Reset password error:", err);
+    setForgotError('Failed to reset password. Please check OTP and try again.');
+  } finally {
+    setForgotLoading(false);
+  }
+};
+
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
@@ -155,12 +328,135 @@ export function LoginPage() {
               </button>
             </p>
 
-            {/* Forgot Password button removed */}
+            {/* Forgot Password button */}
+            <button
+              type="button"
+              onClick={() => setShowForgotModal(true)}
+              className="text-sm text-blue-500 hover:underline mt-2"
+            >
+              Forgot Password?
+            </button>
           </div>
         </div>
       </div>
 
-  {/* Forgot Password Modal removed */}
+      {/* Forgot Password Modal */}
+      {showForgotModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-2xl p-8 w-full max-w-sm relative">
+            <button
+              className="absolute top-3 right-3 text-gray-400 hover:text-gray-600"
+              onClick={resetForgotModal}
+            >
+              <X className="h-5 w-5" />
+            </button>
+            <h2 className="text-xl font-bold mb-4 text-gray-800">Forgot Password</h2>
+
+
+
+
+            {/* Step 1: Send OTP */}
+            {forgotStep === 1 && (
+              <form
+                onSubmit={(e) => {
+                  e.preventDefault();
+                  handleSendOtpStep();
+                }}
+                className="space-y-4"
+              >
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    UserId
+                  </label>
+                  <input
+                    type="text"
+                    value={forgotUserId}
+                    onChange={(e) => setForgotUserId(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    placeholder="Enter your mobile number"
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={otpLoading || !forgotUserId}
+                  className="w-full bg-blue-500 text-white py-2 rounded-lg font-medium hover:bg-blue-600 transition-all disabled:opacity-50"
+                >
+                  {otpLoading ? 'Sending OTP...' : 'Send OTP'}
+                </button>
+                {forgotError && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-2 mt-2">
+                    <p className="text-red-700 text-sm">{forgotError}</p>
+                  </div>
+                )}
+              </form>
+            )}
+
+            {/* Step 2: Verify OTP */}
+            {forgotStep === 2 && (
+              <form onSubmit={handleVerifyOtpStep} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    OTP
+                  </label>
+                  <input
+                    type="text"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    placeholder="Enter OTP"
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={forgotLoading || !otp}
+                  className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition-all disabled:opacity-50"
+                >
+                  {forgotLoading ? 'Verifying...' : 'Verify OTP'}
+                </button>
+                {forgotError && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-2 mt-2">
+                    <p className="text-red-700 text-sm">{forgotError}</p>
+                  </div>
+                )}
+              </form>
+            )}
+
+            {/* Step 3: Reset Password */}
+            {forgotStep === 3 && (
+              <form onSubmit={handleResetPasswordStep} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    New Password
+                  </label>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2"
+                    placeholder="Enter new password"
+                    required
+                  />
+                </div>
+                <button
+                  type="submit"
+                  disabled={forgotLoading || !newPassword}
+                  className="w-full bg-blue-600 text-white py-2 rounded-lg font-medium hover:bg-blue-700 transition-all disabled:opacity-50"
+                >
+                  {forgotLoading ? 'Resetting...' : 'Reset Password'}
+                </button>
+                {forgotError && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-2 mt-2">
+                    <p className="text-red-700 text-sm">{forgotError}</p>
+                  </div>
+                )}
+              </form>
+            )}
+          </div>
+        </div>
+      )}
+      <div id="recaptcha-container"></div>
     </div>
   );
 }

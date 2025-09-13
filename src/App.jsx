@@ -15,6 +15,7 @@ function App() {
   return (
     <>
       <div>
+        <div id="recaptcha-container"></div>
         <UserProvider>
           <GroupProvider>
             <Router>

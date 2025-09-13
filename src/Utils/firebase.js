@@ -67,36 +67,38 @@ auth.settings.appVerificationDisabledForTesting = true;
 
 
 
-export function setupRecaptcha(containerId = "recaptcha-container") {
-  const auth = getFirebaseAuth();
+const setupRecaptcha = () => {
+  console.log("this is setup recaptcha function");
   if (!window.recaptchaVerifier) {
-    const container = document.getElementById(containerId);
-    if (!container) {
-      throw new Error(`reCAPTCHA container with id '${containerId}' not found in DOM!`);
-    }
-    window.recaptchaVerifier = new RecaptchaVerifier(
-      containerId,
+    window.recaptchaVerifier = new RecaptchaVerifier(auth,
+      "recaptcha-container",
       {
         size: "invisible",
-        callback: (response) => {},
-        "expired-callback": () => {}
+        callback: (response) => {
+          console.log("reCAPTCHA solved");
+        },
       },
-      auth
+      
     );
-    window.recaptchaVerifier.render().then((widgetId) => {
-      window.recaptchaWidgetId = widgetId;
-    });
   }
   return window.recaptchaVerifier;
-}
+};
 
-export async function sendOtp(phoneNumber) {
+export async function sendOtp(phoneNumber,setConfirmationResult) {
+
+  console.log(`Sending OTP to ${phoneNumber}...`);
+  const appVerifier = setupRecaptcha();
+  console.log(appVerifier);
   try {
-    const verifier = setupRecaptcha('recaptcha-container');
-    const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, verifier);
-    return confirmationResult;
-  } catch (err) {
-    throw err;
+    const confirmationResult = await signInWithPhoneNumber(
+      auth,
+      phoneNumber,
+      appVerifier
+    );
+    setConfirmationResult(confirmationResult);
+    console.log("OTP sent!");
+  } catch (error) {
+    console.error("Error sending OTP:", error);
   }
 }
 

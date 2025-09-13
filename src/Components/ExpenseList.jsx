@@ -122,9 +122,9 @@ export const ExpenseList = ({ expenses, onExpenseDeleted, onDeleteRequest }) => 
                       {expense.tags.map((tag, tagIndex) => (
                         <span
                           key={`${expense.id}-tag-${tagIndex}`}
-                          className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-black font-normal"
+                          className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-gray-100 text-black font-normal border border-blue-400"
                         >
-                          <Hash className="h-3 w-3 mr-1" />
+                          <Hash className="h-3 w-3 mr-1 text-black-400" />
                           {tag}
                         </span>
                       ))}

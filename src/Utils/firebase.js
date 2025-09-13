@@ -34,8 +34,6 @@ export function getFirebaseAuth() {
 // ✅ Always export one shared auth
 export const auth = getAuth(app);
 
-auth.settings.appVerificationDisabledForTesting = true;
-
 // export function setupRecaptcha(containerId = "recaptcha-container") {
 //   const auth = getFirebaseAuth();
 //   if (!window.recaptchaVerifier) {

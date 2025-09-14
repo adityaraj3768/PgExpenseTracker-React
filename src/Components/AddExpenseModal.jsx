@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useRef } from "react";
 import axios from "axios";
 import {
   IndianRupee,
@@ -23,15 +24,16 @@ export const AddExpenseModal = ({ isOpen, onClose }) => {
   const [allGroups, setAllGroups] = useState([]);
   const [selectedGroupsForExpense, setSelectedGroupsForExpense] = useState([]);
   const [isLoadingGroups, setIsLoadingGroups] = useState(false);
+  const coinAudioRef = useRef(null);
 
   const {
-  currentGroup,
-  fetchAllGroups: contextFetchAllGroups,
-  remainingCoins,
-  setCurrentGroup,
-  setTotalExpenses,
-  setRemainingCoins,
-  setMonthlyLimit,
+    currentGroup,
+    fetchAllGroups: contextFetchAllGroups,
+    remainingCoins,
+    setCurrentGroup,
+    setTotalExpenses,
+    setRemainingCoins,
+    setMonthlyLimit,
   } = useGroup();
 
   const commonTags = [
@@ -182,10 +184,15 @@ export const AddExpenseModal = ({ isOpen, onClose }) => {
           setMonthlyLimit(data.user.monthlyLimitCoins);
         }
         const totalGroups = groupCodes.length;
+        // Play coin sound, then close modal immediately after sound ends
         toast.success(`Expense added successfully !`, {
           duration: 2000,
           position: "top-center",
         });
+        if (coinAudioRef.current) {
+          coinAudioRef.current.currentTime = 0;
+          coinAudioRef.current.play();
+        }
         handleClose();
       } catch (error) {
         // Failed to add expense
@@ -257,13 +264,16 @@ export const AddExpenseModal = ({ isOpen, onClose }) => {
     .filter((tag) => !tags.includes(tag) && tag.includes(newTag.toLowerCase()))
     .slice(0, 8);
 
-  if (!isOpen) return null;
 
+  // if (!isOpen) {
+  //   return null;
+  // }
   return (
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="sticky top-0 bg-white p-6 border-b border-gray-200 rounded-t-2xl flex justify-between items-center z-10">
+        <audio ref={coinAudioRef} src="/sounds/coin.mp3" preload="auto" />
           <div>
             <h2 className="text-xl font-bold text-gray-900">Add New Expense</h2>
             {currentGroup && (
@@ -355,7 +365,9 @@ export const AddExpenseModal = ({ isOpen, onClose }) => {
                     onClick={() => addTag(newTag)}
                     className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 text-blue-600 hover:text-blue-700"
                   >
-                    <Plus className="h-4 w-4" />
+                    <span className="inline-flex items-center justify-center rounded-full bg-blue-100 animate-pulse" style={{ width: 28, height: 28 }}>
+                      <Plus className="h-4 w-4 text-blue-600" />
+                    </span>
                   </button>
                 )}
               </div>
@@ -369,7 +381,7 @@ export const AddExpenseModal = ({ isOpen, onClose }) => {
                         key={tag}
                         type="button"
                         onClick={() => addTag(tag)}
-                        className="px-3 py-1 text-sm bg-gray-100 text-gray-700 rounded-full hover:bg-gray-200"
+                        className="px-3 py-1 text-sm bg-gray-50 text-gray-700 rounded-full border border-blue-400 hover:bg-blue-50"
                       >
                         {tag}
                       </button>

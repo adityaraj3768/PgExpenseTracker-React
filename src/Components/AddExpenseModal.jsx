@@ -189,10 +189,7 @@ export const AddExpenseModal = ({ isOpen, onClose }) => {
           duration: 2000,
           position: "top-center",
         });
-        if (coinAudioRef.current) {
-          coinAudioRef.current.currentTime = 0;
-          coinAudioRef.current.play();
-        }
+        
         handleClose();
       } catch (error) {
         // Failed to add expense
@@ -273,8 +270,7 @@ export const AddExpenseModal = ({ isOpen, onClose }) => {
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="sticky top-0 bg-white p-6 border-b border-gray-200 rounded-t-2xl flex justify-between items-center z-10">
-        <audio ref={coinAudioRef} src="/sounds/coin.mp3" preload="auto" />
-          <div>
+        <div>
             <h2 className="text-xl font-bold text-gray-900">Add New Expense</h2>
             {currentGroup && (
               <div className="text-sm text-gray-600 mt-1">

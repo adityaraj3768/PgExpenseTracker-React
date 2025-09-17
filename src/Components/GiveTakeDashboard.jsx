@@ -4,12 +4,15 @@ import {
   ArrowDownCircle,
   Wallet,
   MoveDown,
+  Check,
   MoveUp,
   Trash,
+  Pencil,
 } from "lucide-react";
 import axios from "axios";
 import { getApiUrl } from "../Utils/api";
 import toast, { Toaster } from "react-hot-toast";
+import { useSpring, animated } from "@react-spring/web";
 
 import { formatDateIndian } from "../Utils/formatDateIndian";
 
@@ -177,6 +180,17 @@ export default function GiveTakeDashboard() {
     }
   };
 
+  // Animated values (must come after totalGiven and totalTaken are defined)
+  const givenSpring = useSpring({
+    val: totalGiven,
+    config: { duration: 1000 },
+  });
+
+  const takenSpring = useSpring({
+    val: totalTaken,
+    config: { duration: 1000 },
+  });
+
   return (
     <>
       <Toaster position="top-center" />
@@ -197,9 +211,9 @@ export default function GiveTakeDashboard() {
                   Given
                 </span>
               </div>
-              <span className="text-2xl sm:text-3xl font-bold text-green-500">
-                ₹ {totalGiven}
-              </span>
+              <animated.p className="text-2xl sm:text-3xl font-bold text-green-500">
+                {givenSpring.val.to((val) => `₹ ${val.toFixed(2)}`)}
+              </animated.p>
             </div>
 
             {/* Total Taken */}
@@ -210,9 +224,9 @@ export default function GiveTakeDashboard() {
                   Taken
                 </span>
               </div>
-              <span className="text-2xl sm:text-3xl font-bold text-red-500">
-                ₹ {totalTaken}
-              </span>
+              <animated.p className="text-2xl sm:text-3xl font-bold text-red-500">
+                {takenSpring.val.to((val) => `₹ ${val.toFixed(2)}`)}
+              </animated.p>
             </div>
           </div>
 
@@ -279,13 +293,24 @@ export default function GiveTakeDashboard() {
                             {txn.status}
                           </span>
                         )}
-                        <button
-                          className="p-1 rounded-full bg-red-50 hover:bg-red-100 text-red-600 transition mt-1"
-                          onClick={() => handleDeleteClick(txn)}
-                          title="Delete"
-                        >
-                          <Trash strokeWidth={1.5} className="w-4 h-4" />
-                        </button>
+                        <div className="flex gap-2 mt-1">
+                          {/* Edit Button */}
+                          {/* <button
+                            className="p-2 rounded-full bg-red-100 text-red-500 hover:bg-red-200 shadow-sm transition"
+                            title="Edit"
+                          >
+                            <Pencil strokeWidth={1.8} className="w-4 h-4" />
+                          </button> */}
+
+                          {/* Mark as Settled Button */}
+                          <button
+                            onClick={() => handleDeleteClick(txn)}
+                            className="p-2 rounded-full bg-green-100 text-green-600 hover:bg-green-200 shadow-sm transition"
+                            title="Mark as Settled"
+                          >
+                            <Check strokeWidth={1.8} className="w-4 h-4" />
+                          </button>
+                        </div>
                       </div>
                     </li>
                   ))}
@@ -313,7 +338,7 @@ export default function GiveTakeDashboard() {
                           onClick={handleConfirmDelete}
                           disabled={isDeleting}
                         >
-                          {isDeleting ? "Deleting..." : "Delete"}
+                          {isDeleting ? "Completing..." : "Complete"}
                         </button>
                       </div>
                     </div>

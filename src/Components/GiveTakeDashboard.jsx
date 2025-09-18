@@ -30,6 +30,56 @@ export default function GiveTakeDashboard() {
   const [deleteDialog, setDeleteDialog] = useState({ open: false, txn: null });
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Edit dialog state
+  const [editDialog, setEditDialog] = useState({ open: false, txn: null });
+  const [editType, setEditType] = useState("increase"); // "increase" or "decrease"
+  const [editAmount, setEditAmount] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
+
+  const openEditDialog = (txn) => {
+    setEditDialog({ open: true, txn });
+    setEditType("increase");
+    setEditAmount("");
+  };
+  const closeEditDialog = () => setEditDialog({ open: false, txn: null });
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    if (!editAmount || isNaN(editAmount) || Number(editAmount) <= 0) {
+      toast.error("Enter a valid amount.");
+      return;
+    }
+    if (editType === "decrease") {
+      const currentAmount = editDialog.txn?.amount || 0;
+      if (Number(editAmount) > currentAmount) {
+        toast.error("You cannot reduce more than the current balance in this record.");
+        return;
+      }
+    }
+    setIsEditing(true);
+    try {
+      const token = localStorage.getItem("token");
+      const url =
+        editType === "increase"
+          ? getApiUrl(`/pg/increase-give-or-take/${editDialog.txn.id}`)
+          : getApiUrl(`/pg/decrease-give-or-take/${editDialog.txn.id}`);
+      await axios.post(
+        url,
+        { amount: Number(editAmount) },
+        { headers: { Authorization: token ? `Bearer ${token}` : undefined } }
+      );
+      toast.success(
+        `Amount ${editType === "increase" ? "increased" : "decreased"}!`
+      );
+      closeEditDialog();
+      fetchTransactions();
+    } catch (err) {
+      toast.error("Failed to update amount.");
+    } finally {
+      setIsEditing(false);
+    }
+  };
+
   const handleDeleteClick = (txn) => setDeleteDialog({ open: true, txn });
   const handleCancelDelete = () => setDeleteDialog({ open: false, txn: null });
   const handleConfirmDelete = async () => {
@@ -295,12 +345,97 @@ export default function GiveTakeDashboard() {
                         )}
                         <div className="flex gap-2 mt-1">
                           {/* Edit Button */}
-                          {/* <button
+                          <button
                             className="p-2 rounded-full bg-red-100 text-red-500 hover:bg-red-200 shadow-sm transition"
                             title="Edit"
+                            onClick={() => openEditDialog(txn)}
                           >
                             <Pencil strokeWidth={1.8} className="w-4 h-4" />
-                          </button> */}
+                          </button>
+                {/* Edit Amount Dialog */}
+                {editDialog.open && (
+                  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+                    <form
+                      onSubmit={handleEditSubmit}
+                      className="bg-white rounded-2xl shadow-xl p-6 w-[90%] max-w-xs flex flex-col gap-4 border border-gray-200 relative"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <button
+                        type="button"
+                        onClick={closeEditDialog}
+                        className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
+                        aria-label="Close"
+                      >
+                        ×
+                      </button>
+                      <h2 className="text-lg font-bold text-gray-800 mb-2 text-center">
+                        {editDialog.txn?.type === "GIVE"
+                          ? "Edit Given Amount"
+                          : "Edit Taken Amount"}
+                      </h2>
+                      <div className="text-xs text-gray-500 text-center mb-1">
+                        Current {editDialog.txn?.type === "GIVE" ? "Given" : "Taken"} Amount: <span className={editDialog.txn?.type === "GIVE" ? "text-green-600" : "text-red-600"}>₹ {editDialog.txn?.amount}</span>
+                      </div>
+                      <div className="flex gap-2 mb-2">
+                        <button
+                          type="button"
+                          className={`flex-1 py-2 rounded-lg font-semibold ${
+                            editType === "increase"
+                              ? (editDialog.txn?.type === "GIVE" ? "bg-green-500 text-white" : "bg-red-500 text-white")
+                              : "bg-gray-200 text-gray-700"
+                          }`}
+                          onClick={() => setEditType("increase")}
+                        >
+                          {editDialog.txn?.type === "GIVE" ? "Increase Given" : "Increase Taken"}
+                        </button>
+                        <button
+                          type="button"
+                          className={`flex-1 py-2 rounded-lg font-semibold ${
+                            editType === "decrease"
+                              ? (editDialog.txn?.type === "GIVE" ? "bg-green-100 text-green-700 border border-green-400" : "bg-red-100 text-red-700 border border-red-400")
+                              : "bg-gray-200 text-gray-700"
+                          }`}
+                          onClick={() => setEditType("decrease")}
+                        >
+                          {editDialog.txn?.type === "GIVE" ? "Reduce Given" : "Reduce Taken"}
+                        </button>
+                      </div>
+                      <label className="text-sm text-gray-600">
+                        {editType === "increase"
+                          ? (editDialog.txn?.type === "GIVE" ? "Amount to add to Given" : "Amount to add to Taken")
+                          : (editDialog.txn?.type === "GIVE" ? "Amount to reduce from Given" : "Amount to reduce from Taken")}
+                      </label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={editAmount}
+                        onChange={(e) => setEditAmount(e.target.value)}
+                        required
+                        className="border border-gray-300 rounded px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-200"
+                        placeholder={editType === "increase"
+                          ? (editDialog.txn?.type === "GIVE" ? "Enter amount to add to Given" : "Enter amount to add to Taken")
+                          : (editDialog.txn?.type === "GIVE" ? "Enter amount to reduce from Given" : "Enter amount to reduce from Taken")}
+                      />
+                      <button
+                        type="submit"
+                        className={`mt-2 py-2 rounded-lg font-bold shadow transition disabled:opacity-60 disabled:cursor-not-allowed ${
+                          editType === "increase"
+                            ? (editDialog.txn?.type === "GIVE" ? "bg-green-500 text-white hover:bg-green-600" : "bg-red-500 text-white hover:bg-red-600")
+                            : (editDialog.txn?.type === "GIVE" ? "bg-green-100 text-green-700 border border-green-400 hover:bg-green-200" : "bg-red-100 text-red-700 border border-red-400 hover:bg-red-200")
+                        }`}
+                        disabled={isEditing}
+                      >
+                        {isEditing
+                          ? (editType === "increase"
+                              ? (editDialog.txn?.type === "GIVE" ? "Increasing..." : "Increasing...")
+                              : (editDialog.txn?.type === "GIVE" ? "Reducing..." : "Reducing..."))
+                          : (editType === "increase"
+                              ? (editDialog.txn?.type === "GIVE" ? "Increase Given" : "Increase Taken")
+                              : (editDialog.txn?.type === "GIVE" ? "Reduce Given" : "Reduce Taken"))}
+                      </button>
+                    </form>
+                  </div>
+                )}
 
                           {/* Mark as Settled Button */}
                           <button

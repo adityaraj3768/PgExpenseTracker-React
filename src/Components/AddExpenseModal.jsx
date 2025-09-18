@@ -121,6 +121,7 @@ export const AddExpenseModal = ({ isOpen, onClose }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const addStartTime = Date.now();
     setIsLoading(true);
 
     // Check if user has enough coins before proceeding
@@ -184,12 +185,12 @@ export const AddExpenseModal = ({ isOpen, onClose }) => {
           setMonthlyLimit(data.user.monthlyLimitCoins);
         }
         const totalGroups = groupCodes.length;
-        // Play coin sound, then close modal immediately after sound ends
-        toast.success(`Expense added successfully !`, {
-          duration: 2000,
+        // Calculate and show time taken
+        const timeTaken = Math.round((Date.now() - addStartTime) / 1000);
+        toast.success(`You added in just ${timeTaken} second${timeTaken === 1 ? '' : 's'}!`, {
+          duration: 3000,
           position: "top-center",
         });
-        
         handleClose();
       } catch (error) {
         // Failed to add expense

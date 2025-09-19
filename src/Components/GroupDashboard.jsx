@@ -113,6 +113,7 @@ function MemberExpensesModal({ isOpen, onClose, member, expenses }) {
 
 
 import { AddExpenseModal } from "./AddExpenseModal";
+import Confetti from "react-confetti";
 import { Coins } from "./Coins";
 
 // Small popup/modal for adding coins and setting monthly limit
@@ -192,6 +193,7 @@ function CoinsPopup({ isOpen, onClose, onSave, onAddCoins, loading, monthlyLimit
 }
 
 export function GroupDashboard() {
+  const [celebrate, setCelebrate] = useState(false);
   // State for member expenses modal
   const [selectedMember, setSelectedMember] = useState(null);
   const navigate = useNavigate();
@@ -1223,11 +1225,17 @@ export function GroupDashboard() {
 
       {/* === MODALS === */}
 
+      {/* Confetti Celebration */}
+      {celebrate && <Confetti width={window.innerWidth} height={window.innerHeight} />}
       {/* Add Expense Modal */}
       {showAddExpenses && (
         <AddExpenseModal
           isOpen={showAddExpenses}
           onClose={() => setShowAddExpenses(false)}
+          onCelebrate={() => {
+            setCelebrate(true);
+            setTimeout(() => setCelebrate(false), 5000);
+          }}
         />
       )}
 

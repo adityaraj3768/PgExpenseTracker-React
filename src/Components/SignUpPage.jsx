@@ -133,14 +133,23 @@ catch (err) {
               <div className="relative">
                 
                 <input
-                  type="text"
-                  name="userId"
-                  value={formData.userId}
-                  onChange={handleChange}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
-                  placeholder="Enter your mobile number"
-                  required
-                />
+  type="tel"
+  name="userId"
+  value={formData.userId}
+  onChange={handleChange}
+  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+  placeholder="Enter your mobile number"
+  maxLength={10}
+  required
+  pattern="^(?!(\d)\1{9})[6-9]\d{9}$"
+  onInvalid={(e) =>
+    e.target.setCustomValidity("Please enter a valid 10-digit Indian mobile number")
+  }
+  onInput={(e) => e.target.setCustomValidity("")}
+/>
+
+
+
               </div>
             </div>
 

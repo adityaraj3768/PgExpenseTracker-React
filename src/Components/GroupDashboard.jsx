@@ -194,6 +194,9 @@ function CoinsPopup({ isOpen, onClose, onSave, onAddCoins, loading, monthlyLimit
 
 export function GroupDashboard() {
   const [celebrate, setCelebrate] = useState(false);
+  // State for quick add popup
+  const [quickAddTime, setQuickAddTime] = useState(null);
+  const [showQuickAddPopup, setShowQuickAddPopup] = useState(false);
   // State for member expenses modal
   const [selectedMember, setSelectedMember] = useState(null);
   const navigate = useNavigate();
@@ -1236,8 +1239,70 @@ export function GroupDashboard() {
             setCelebrate(true);
             setTimeout(() => setCelebrate(false), 5000);
           }}
+          onQuickAdd={(ms) => {
+            setQuickAddTime(ms);
+            setShowQuickAddPopup(true);
+            setTimeout(() => setShowQuickAddPopup(false), 2500);
+          }}
         />
       )}
+
+    {/* Quick Add Popup - Enhanced Modern UI */}
+    {showQuickAddPopup && quickAddTime !== null && quickAddTime < 2000 && (
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-lg">
+        <motion.div
+          initial={{ opacity: 0, scale: 0.7, y: 50 }}
+          animate={{ opacity: 1, scale: 1, y: 0 }}
+          exit={{ opacity: 0, scale: 0.7, y: 50 }}
+          transition={{ duration: 0.4, ease: "easeOut" }}
+          className="relative bg-gradient-to-br from-blue-50 via-white to-purple-100 shadow-2xl rounded-3xl p-8 w-[90%] max-w-xs border-2 border-blue-300/40 flex flex-col items-center overflow-hidden"
+        >
+          {/* Animated Glow & Confetti */}
+          <div className="absolute inset-0 pointer-events-none">
+            <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-tr from-blue-200/40 to-purple-200/30 blur-2xl rounded-3xl animate-pulse" />
+          </div>
+
+          {/* Emoji bounce and sparkles */}
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: [1.3, 0.95, 1.1, 1] }}
+            transition={{ duration: 0.7, ease: "easeOut" }}
+            className="z-10 mb-2"
+          >
+            <span className="text-6xl drop-shadow-lg">🚀</span>
+          </motion.div>
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.2, duration: 0.5 }}
+            className="z-10"
+          >
+            <span className="text-2xl">✨</span>
+          </motion.div>
+
+          {/* Title */}
+          <h3 className="text-2xl font-extrabold bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-600 bg-clip-text text-transparent z-10 mt-2 tracking-tight text-center">
+            Lightning Fast!
+          </h3>
+
+          {/* Subtitle */}
+          <p className="text-base text-gray-700 text-center mt-3 z-10 font-medium">
+            You added the expense in
+            <span className="font-extrabold text-blue-700 mx-1 text-lg">
+              {(quickAddTime / 1000).toFixed(2)}s
+            </span>
+            <span className="ml-1 text-lg">🎉</span>
+          </p>
+          <div className="mt-4 z-10">
+            <span className="inline-block px-4 py-2 rounded-full bg-gradient-to-r from-blue-100 to-purple-100 text-blue-700 font-semibold shadow-md animate-bounce">
+              Amazing Speed!
+            </span>
+          </div>
+        </motion.div>
+      </div>
+    )}
+
+
 
       {/* Delete Confirmation Modal */}
       {expenseToDelete && (

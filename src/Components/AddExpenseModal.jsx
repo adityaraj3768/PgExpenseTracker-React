@@ -17,7 +17,7 @@ import { useGroup } from "../Context/GroupContext";
 import { getApiUrl } from "../Utils/api";
 import { toast } from "react-hot-toast";
 
-export const AddExpenseModal = ({ isOpen, onClose, onCelebrate }) => {
+export const AddExpenseModal = ({ isOpen, onClose, onCelebrate, onQuickAdd }) => {
   const [amount, setAmount] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
   const [tags, setTags] = useState([]);
@@ -125,7 +125,7 @@ export const AddExpenseModal = ({ isOpen, onClose, onCelebrate }) => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    const addStartTime = Date.now();
+  const addStartTime = Date.now();
     setIsLoading(true);
 
     // Check if user has enough coins before proceeding
@@ -190,22 +190,22 @@ export const AddExpenseModal = ({ isOpen, onClose, onCelebrate }) => {
         }
         const totalGroups = groupCodes.length;
         // Calculate and show time taken
-        const timeTaken = Math.round((Date.now() - addStartTime) / 1000);
-        toast.success(`You added in just ${timeTaken} second${timeTaken === 1 ? '' : 's'}!`, {
+        const timeTakenMs = Date.now() - addStartTime;
+        const timeTakenSec = timeTakenMs / 1000;
+        toast.success(`You added in just ${timeTakenSec.toFixed(2)} second${timeTakenSec < 2 ? '' : 's'}!`, {
           duration: 3000,
           position: "top-center",
         });
-         
 
-    
-      
-     // 🎉 Trigger confetti if added in <= 2 sec
-     if (timeTaken <= 2 && onCelebrate) {
-       onCelebrate();
-     }
-     handleClose();
-
-     
+        // 🎉 Trigger confetti if added in <= 2 sec
+        if (timeTakenSec <= 2 && onCelebrate) {
+          onCelebrate();
+        }
+        // Show modern popup if added in <= 2 sec
+        if (timeTakenSec <= 2 && onQuickAdd) {
+          onQuickAdd(timeTakenMs);
+        }
+        handleClose();
 
       } catch (error) {
         // Failed to add expense

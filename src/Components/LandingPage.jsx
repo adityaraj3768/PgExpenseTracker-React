@@ -83,10 +83,34 @@ export function LandingPage({
         alert('You must be logged in to enter a group.');
         return;
       }
+
+    //   // Check localStorage first
+    // const cachedData = localStorage.getItem('userGroupsData');
+    // if (cachedData) {
+    //   const parsed = JSON.parse(cachedData);
+    //   console.log('Using cached groups:', parsed.groups);
+
+    //   // set coins
+    //   setCoins(parsed.monthlyLimitCoins);
+
+    //   if (Array.isArray(parsed.groups) && parsed.groups.length > 0) {
+    //     if (parsed.groups.length === 1) {
+    //       selectGroup(parsed.groups[0]);
+    //     } else {
+    //       setUserGroups(parsed.groups);
+    //       setShowGroupSelectionModal(true);
+    //     }
+    //     return; // ✅ stop here, don’t call backend
+    //   }
+    // }
+
+
       // Get current month (0-based, so add 1) and year
       const now = new Date();
       const month = now.getMonth() + 1;
       const year = now.getFullYear();
+
+
       // Fetch only the current month's group data
       const response = await axios.get(getApiUrl(`/pg/my-groups?month=${month}&year=${year}`), {
         headers: {
@@ -95,12 +119,23 @@ export function LandingPage({
       });
       // Log the groups received from the backend
       console.log('Groups received from backend:', response.data.groups);
+      console.log('Monthly Limit Coins:', response.data.monthlyLimitCoins);
+      console.log('Remaining Coins:', response.data.remainingCoins);
       //this is the  all groups of the user that he belongs to
       const groups = response.data.groups;
 
   //this is the user's monthly limit coins
   const coins  = response.data.monthlyLimitCoins;
+
   setCoins(coins);
+
+
+  // // Cache the groups data in localStorage
+  // // Save in localStorage for future use
+  //   localStorage.setItem(
+  //     'userGroupsData',
+  //     JSON.stringify({ groups, monthlyLimitCoins: coins })
+  //   );
 
       if (Array.isArray(groups) && groups.length > 0) {
         if (groups.length === 1) {
@@ -126,11 +161,12 @@ export function LandingPage({
   // Function to handle group selection
   const selectGroup = (group) => {
     setCurrentGroup(group);
-    localStorage.setItem('currentGroupId', group.id);
+    // Save both id and group details
+  localStorage.setItem("currentGroupId", group.id);
+  localStorage.setItem("currentGroup", JSON.stringify(group));
     setShowGroupSelectionModal(false);
     navigate(`/dashboard/`);
   };
-
 
 
   //this will show the enter group modal

@@ -163,17 +163,23 @@ export const AddExpenseModal = ({ isOpen, onClose, onCelebrate, onQuickAdd }) =>
           }
         );
         const data = response.data;
-        // Update expense list in currentGroup
-        if (setCurrentGroup && currentGroup) {
+
+        //the response from the backend
+        console.log("Expense added successfully:", data);
+        // Add the returned expense directly to the currentGroup context
+        if (setCurrentGroup && currentGroup && data) {
+          const newExpense = {
+            ...data,
+            amount: data.amount,
+            tags: data.tags,
+            paymentDate: data.paymentDate,
+            paidBy: data.paidBy,
+            createdAt: data.createdAt,
+            id: data.id || data._id,
+          };
           setCurrentGroup({
             ...currentGroup,
-            expenses: [...(currentGroup.expenses || []), {
-              amount: data.amount,
-              tags: data.tags,
-              paymentDate: data.paymentDate,
-              paidBy: data.paidBy,
-              // add any other fields you want to display
-            }],
+            expenses: [...(currentGroup.expenses || []), newExpense],
           });
         }
         // Update total amount

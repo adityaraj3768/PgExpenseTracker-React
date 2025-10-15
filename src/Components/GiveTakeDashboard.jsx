@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   ArrowUpCircle,
   ArrowDownCircle,
@@ -15,6 +15,7 @@ import toast, { Toaster } from "react-hot-toast";
 import { useSpring, animated } from "@react-spring/web";
 
 import { formatDateIndian } from "../Utils/formatDateIndian";
+import { useGroup } from "../Context/GroupContext";
 
 export default function GiveTakeDashboard() {
   // Transactions state
@@ -25,6 +26,9 @@ export default function GiveTakeDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmittingGive, setIsSubmittingGive] = useState(false);
   const [isSubmittingTake, setIsSubmittingTake] = useState(false);
+  // Remaining coins (updated from give/take responses)
+  const [remainingCoins, setRemainingCoins] = useState(null);
+  const { remainingCoins: globalRemainingCoins, setRemainingCoins: setGlobalRemainingCoins } = useGroup();
 
   // Delete dialog state
   const [deleteDialog, setDeleteDialog] = useState({ open: false, txn: null });
@@ -87,7 +91,7 @@ export default function GiveTakeDashboard() {
     setIsDeleting(true);
     try {
       const token = localStorage.getItem("token");
-      await axios.delete(
+     const res= await axios.delete(
         getApiUrl(`/pg/remove-give-or-take/${deleteDialog.txn.id}`),
         {
           headers: { Authorization: token ? `Bearer ${token}` : undefined },
@@ -95,6 +99,11 @@ export default function GiveTakeDashboard() {
       );
       toast.success("Transaction deleted.");
       setDeleteDialog({ open: false, txn: null });
+      console.log("The remaining coins after deletion:", res.data);
+      if (res.data && typeof res.data !== 'undefined') {
+        setRemainingCoins(res.data);
+        setGlobalRemainingCoins(res.data);
+      }
       fetchTransactions();
     } catch (err) {
       toast.error("Failed to delete transaction.");
@@ -113,7 +122,24 @@ export default function GiveTakeDashboard() {
           Authorization: token ? `Bearer ${token}` : undefined,
         },
       });
-      const data = res.data || [];
+      const payload = res.data;
+      let data = [];
+      if (Array.isArray(payload)) {
+        data = payload;
+      } else if (payload && Array.isArray(payload.records)) {
+        data = payload.records;
+      } else {
+        data = [];
+      }
+
+      // If backend returns remainingCoins with the payload, update state
+      if (payload && typeof payload.remainingCoins !== 'undefined') {
+        setRemainingCoins(payload.remainingCoins);
+        if (typeof setGlobalRemainingCoins === "function") {
+          setGlobalRemainingCoins(payload.remainingCoins);
+        }
+      }
+
       setTransactions(data);
       setTotalGiven(
         data
@@ -138,6 +164,20 @@ export default function GiveTakeDashboard() {
   useEffect(() => {
     fetchTransactions();
   }, []);
+
+  // Show a transient toast when remaining coins change (skip initial mount)
+  const didMountRef = useRef(false);
+  useEffect(() => {
+    if (!didMountRef.current) {
+      didMountRef.current = true;
+      return;
+    }
+    if (typeof globalRemainingCoins === 'number') {
+      toast.success(`Remaining coins: ${globalRemainingCoins}`);
+    } else if (typeof remainingCoins === 'number') {
+      toast.success(`Remaining coins: ${remainingCoins}`);
+    }
+  }, [globalRemainingCoins, remainingCoins]);
 
   // Give form state
   const todayStr = new Date().toISOString().slice(0, 10);
@@ -181,12 +221,37 @@ export default function GiveTakeDashboard() {
     setIsSubmittingGive(true);
     try {
       const token = localStorage.getItem("token");
-      await axios.post(getApiUrl("/pg/give-or-take"), giveForm, {
+      const res = await axios.post(getApiUrl("/pg/give-or-take"), giveForm, {
         headers: { Authorization: token ? `Bearer ${token}` : undefined },
       });
-      toast.success("Money given successfully!");
+      const data = res.data || {};
+
+      // Expecting { record: {...}, remainingCoins: number }
+      if (data.record) {
+        const record = data.record;
+        // Prepend to transactions so UI updates instantly
+        setTransactions((prev) => [record, ...prev]);
+
+        // Update totals locally
+        if (record.type === "GIVE") {
+          setTotalGiven((prev) => prev + Number(record.amount || 0));
+        } else if (record.type === "TAKE") {
+          setTotalTaken((prev) => prev + Number(record.amount || 0));
+        }
+      } else {
+        // fallback: refetch if no record returned
+        await fetchTransactions();
+      }
+
+      if (data.remainingCoins !== undefined) {
+        setRemainingCoins(data.remainingCoins);
+        if (typeof setGlobalRemainingCoins === "function") {
+          setGlobalRemainingCoins(data.remainingCoins);
+        }
+      }
+
+      // Success feedback is provided via the remaining-coins toast effect
       closeGiveForm();
-      fetchTransactions();
     } catch (err) {
       toast.error("Failed to give money.");
       closeGiveForm();
@@ -216,12 +281,33 @@ export default function GiveTakeDashboard() {
     setIsSubmittingTake(true);
     try {
       const token = localStorage.getItem("token");
-      await axios.post(getApiUrl("/pg/give-or-take"), takeForm, {
+      const res = await axios.post(getApiUrl("/pg/give-or-take"), takeForm, {
         headers: { Authorization: token ? `Bearer ${token}` : undefined },
       });
-      toast.success("Money taken successfully!");
+      const data = res.data || {};
+
+      if (data.record) {
+        const record = data.record;
+        setTransactions((prev) => [record, ...prev]);
+
+        if (record.type === "GIVE") {
+          setTotalGiven((prev) => prev + Number(record.amount || 0));
+        } else if (record.type === "TAKE") {
+          setTotalTaken((prev) => prev + Number(record.amount || 0));
+        }
+      } else {
+        await fetchTransactions();
+      }
+
+      if (data.remainingCoins !== undefined) {
+        setRemainingCoins(data.remainingCoins);
+        if (typeof setGlobalRemainingCoins === "function") {
+          setGlobalRemainingCoins(data.remainingCoins);
+        }
+      }
+
+      // Success feedback is provided via the remaining-coins toast effect
       closeTakeForm();
-      fetchTransactions();
     } catch (err) {
       toast.error("Failed to take money.");
       closeTakeForm();
@@ -252,7 +338,7 @@ export default function GiveTakeDashboard() {
       <div className="min-h-screen flex justify-center items-start bg-gradient-to-br from-blue-50 via-white to-indigo-50 py-6 px-2 sm:px-0">
         <div className="bg-white/90 backdrop-blur-xl rounded-3xl shadow-2xl px-2 sm:px-6 py-6 sm:py-10 w-full max-w-2xl border border-white/60 flex flex-col gap-8 sm:gap-10 mx-auto">
           {/* Totals */}
-          <div className="flex flex-col gap-4 sm:flex-row sm:gap-6">
+          <div className="flex flex-col gap-4 sm:flex-row sm:gap-6 items-center">
             {/* Total Given */}
             <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 sm:p-8 shadow-lg border border-green-100 flex-1 flex items-center justify-between min-w-[180px]">
               <div className="flex items-center gap-3">
@@ -278,6 +364,7 @@ export default function GiveTakeDashboard() {
                 {takenSpring.val.to((val) => `₹ ${val.toFixed(2)}`)}
               </animated.p>
             </div>
+            {/* remaining coins toast handled via effect (no pill here) */}
           </div>
 
           {/* Transactions List */}

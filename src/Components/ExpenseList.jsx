@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
 import { getApiUrl } from "../Utils/api";
 import { useState } from "react";
+import { useUser } from "../Context/CurrentUserIdContext";
 import Fuse from "fuse.js";
 import { toast } from "react-hot-toast";
 
@@ -10,6 +11,7 @@ export const ExpenseList = ({ expenses, onExpenseDeleted, onDeleteRequest }) => 
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletingExpenseId, setDeletingExpenseId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const { currentUserId } = useUser();
 
   // ✅ Fuse.js for fuzzy tag search
   const fuse = new Fuse(expenses || [], {
@@ -22,21 +24,24 @@ export const ExpenseList = ({ expenses, onExpenseDeleted, onDeleteRequest }) => 
     : expenses;
 
   const handleDelete = async (expenseId) => {
+    // (Note) Authorization is checked by the click-wrapper before calling this.
     const token = localStorage.getItem("token");
     setIsDeleting(true);
     setDeletingExpenseId(expenseId);
 
     try {
-      await axios.delete(getApiUrl(`/pg/delete/expense/${expenseId}`), {
+     const res = await axios.delete(getApiUrl(`/pg/delete/expense/${expenseId}`), {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-
+      console.log("Delete response:", res.data);
+      
       toast.success("Expense deleted successfully!", {
         duration: 3000,
         position: "top-center",
       });
+
 
       setTimeout(() => {
         if (onExpenseDeleted) {
@@ -53,6 +58,20 @@ export const ExpenseList = ({ expenses, onExpenseDeleted, onDeleteRequest }) => 
       setDeletingExpenseId(null);
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  // Wrapper used by the delete button to enforce frontend authorization
+  const handleDeleteClick = (expense) => {
+    if (currentUserId && expense.userId && expense.userId !== currentUserId) {
+      toast.error("You can only delete your own expenses");
+      return;
+    }
+
+    if (onDeleteRequest) {
+      onDeleteRequest(expense);
+    } else {
+      handleDelete(expense.id);
     }
   };
 
@@ -208,11 +227,7 @@ export const ExpenseList = ({ expenses, onExpenseDeleted, onDeleteRequest }) => 
                     ₹ {expense.amount.toFixed(2)}
                   </p>
                   <button
-                    onClick={() =>
-                      onDeleteRequest
-                        ? onDeleteRequest(expense)
-                        : handleDelete(expense.id)
-                    }
+                    onClick={() => handleDeleteClick(expense)}
                     disabled={deletingExpenseId === expense.id}
                     className={`text-red-600 hover:text-red-800 disabled:opacity-50 disabled:cursor-not-allowed ${
                       deletingExpenseId === expense.id ? "animate-pulse" : ""

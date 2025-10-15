@@ -28,9 +28,10 @@ export function LandingPage({
   
   const [hoveredCard, setHoveredCard] = useState(null);
   const [token, setToken] = useState(false);
+  const [isEntering, setIsEntering] = useState(false);
   const navigate = useNavigate();
 
-  const { setCurrentGroup, fetchAllGroups, setCoins } = useGroup();
+  const { setCurrentGroup, fetchAllGroups, setCoins, setMonthlyLimit, setRemainingCoins } = useGroup();
   const { currentUserId } = useUser();
 
   // Check token on mount
@@ -77,32 +78,18 @@ export function LandingPage({
 
   //this will help to fetch user's groups and show selection modal
   const handleEnterGroup = async () => {
+    // Prevent multiple clicks while a request is in progress
+    if (isEntering) return;
+
     try {
+      setIsEntering(true);
       const token = localStorage.getItem('token');
       if (!token) {
+        setIsEntering(false);
         alert('You must be logged in to enter a group.');
         return;
       }
 
-    //   // Check localStorage first
-    // const cachedData = localStorage.getItem('userGroupsData');
-    // if (cachedData) {
-    //   const parsed = JSON.parse(cachedData);
-    //   console.log('Using cached groups:', parsed.groups);
-
-    //   // set coins
-    //   setCoins(parsed.monthlyLimitCoins);
-
-    //   if (Array.isArray(parsed.groups) && parsed.groups.length > 0) {
-    //     if (parsed.groups.length === 1) {
-    //       selectGroup(parsed.groups[0]);
-    //     } else {
-    //       setUserGroups(parsed.groups);
-    //       setShowGroupSelectionModal(true);
-    //     }
-    //     return; // ✅ stop here, don’t call backend
-    //   }
-    // }
 
 
       // Get current month (0-based, so add 1) and year
@@ -128,6 +115,13 @@ export function LandingPage({
   const coins  = response.data.monthlyLimitCoins;
 
   setCoins(coins);
+  // Update context monthly limit and remaining coins so dashboard shows immediately
+  if (typeof setMonthlyLimit === 'function') {
+    setMonthlyLimit(response.data.monthlyLimitCoins || 0);
+  }
+  if (typeof setRemainingCoins === 'function') {
+    setRemainingCoins(response.data.remainingCoins || 0);
+  }
 
 
   // // Cache the groups data in localStorage
@@ -141,29 +135,33 @@ export function LandingPage({
         if (groups.length === 1) {
           // If user has only one group, enter directly
           selectGroup(groups[0]);
+          setIsEntering(false);
         } else {
           // If user has multiple groups, show selection modal
           setUserGroups(groups);
           setShowGroupSelectionModal(true);
+          setIsEntering(false);
         }
       } else if (groups && groups.id) {
         // Handle case where API returns single group object instead of array
         selectGroup(groups);
+        setIsEntering(false);
       } else {
+        setIsEntering(false);
         alert('You are not part of any group yet. Please create or join a group first.');
       }
     } catch (error) {
       // Show alert if fetching user groups fails
+      setIsEntering(false);
       alert('Failed to fetch your groups. Please try again.');
     }
   };
 
   // Function to handle group selection
   const selectGroup = (group) => {
-    setCurrentGroup(group);
-    // Save both id and group details
-  localStorage.setItem("currentGroupId", group.id);
-  localStorage.setItem("currentGroup", JSON.stringify(group));
+    // Use context setter that persists group to localStorage but skip immediate backend fetch
+    // because we already have the group's data from the landing page
+    setCurrentGroup(group, { skipFetch: true });
     setShowGroupSelectionModal(false);
     navigate(`/dashboard/`);
   };
@@ -256,6 +254,8 @@ export function LandingPage({
                   onClick={handleEnterGroup}
                   hovered={hoveredCard === 'enter'}
                   setHovered={() => setHoveredCard('enter')}
+                  disabled={isEntering}
+                  loading={isEntering}
                 />
               </div>
             )}
@@ -383,25 +383,38 @@ function GroupSelectionModal({ groups, onSelectGroup, onClose }) {
 
 
 // --- Reusable Action Card ---
-function ActionCard({ icon, title, text, color, onClick, hovered, setHovered }) {
+function ActionCard({ icon, title, text, color, onClick, hovered, setHovered, disabled = false, loading = false }) {
   return (
     <div
       className={`relative group cursor-pointer transform transition-all duration-300 ${
         hovered ? 'scale-105' : ''
       }`}
-      onMouseEnter={setHovered}
-      onMouseLeave={() => setHovered(null)}
-      onClick={onClick}
+      onMouseEnter={() => { if (!disabled && typeof setHovered === 'function') setHovered(); }}
+      onMouseLeave={() => { if (!disabled && typeof setHovered === 'function') setHovered(null); }}
+      onClick={(e) => {
+        // If disabled or loading, ignore click
+        if (disabled || loading) return;
+        if (typeof onClick === 'function') onClick(e);
+      }}
+      aria-disabled={disabled || loading}
     >
-      <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-8 shadow-xl border border-white/20 hover:bg-white/80 transition-all duration-300">
+      <div className={`bg-white/70 backdrop-blur-sm rounded-2xl p-8 shadow-xl border border-white/20 transition-all duration-300 ${disabled || loading ? 'opacity-70 cursor-not-allowed' : 'hover:bg-white/80'}`}>
         <div className="flex items-center justify-center mb-4">
-          <div className={`p-3 bg-gradient-to-r ${color} rounded-xl`}>{icon}</div>
+          <div className={`p-3 bg-gradient-to-r ${color} rounded-xl flex items-center justify-center`}>{icon}</div>
         </div>
         <h3 className="text-xl font-semibold text-gray-900 mb-2">{title}</h3>
         <p className="text-gray-600 mb-4">{text}</p>
         <div className="flex items-center justify-center text-blue-600 font-medium">
-          {title.includes('Enter') ? 'Enter Now' : title.includes('Join') ? 'Join Now' : 'Get Started'}
-          <ArrowRight className="ml-2 h-4 w-4" />
+          <span className="inline-flex items-center">
+            {loading ? (
+              <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+              </svg>
+            ) : null}
+            {title.includes('Enter') ? (loading ? 'Entering…' : 'Enter Now') : title.includes('Join') ? (loading ? 'Joining…' : 'Join Now') : (loading ? 'Please wait…' : 'Get Started')}
+            {!loading && <ArrowRight className="ml-2 h-4 w-4" />}
+          </span>
         </div>
       </div>
     </div>

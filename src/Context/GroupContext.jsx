@@ -28,8 +28,14 @@ export const GroupProvider = ({ children }) => {
     }
     try {
       const token = localStorage.getItem("token");
+
+      // Get current month (0-based, so add 1) and year
+      const now = new Date();
+      const month = now.getMonth() + 1;
+      const year = now.getFullYear();
+
       const response = await axios.get(
-        getApiUrl('/pg/my-groups'),
+        getApiUrl(`/pg/my-groups?month=${month}&year=${year}`),
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -61,8 +67,15 @@ export const GroupProvider = ({ children }) => {
       const token = localStorage.getItem("token");
       
       // Fetch all groups that the user belongs to
+
+      // Get current month (0-based, so add 1) and year
+      const now = new Date();
+      const month = now.getMonth() + 1;
+      const year = now.getFullYear();
+
+
       const response = await axios.get(
-        getApiUrl('/pg/my-groups'), 
+        getApiUrl(`/pg/my-groups?month=${month}&year=${year}`), 
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -104,13 +117,17 @@ export const GroupProvider = ({ children }) => {
   };
 
   // Custom setCurrentGroup that also stores in localStorage
-  const setCurrentGroupWithStorage = async (group) => {
+  // Accepts an options object: { skipFetch: boolean }
+  const setCurrentGroupWithStorage = async (group, options = {}) => {
+    const { skipFetch = false } = options || {};
     setCurrentGroup(group);
     if (group) {
       const groupCode = group.groupCode || group.code || group.id;
       localStorage.setItem('currentGroupCode', groupCode);
       // Fetch latest group data (including coins) after selecting group
-      await fetchGroup(group);
+      if (!skipFetch) {
+        await fetchGroup(group);
+      }
     } else {
       localStorage.removeItem('currentGroupCode');
     }
@@ -120,8 +137,14 @@ export const GroupProvider = ({ children }) => {
   const fetchAllGroups = async () => {
     try {
       const token = localStorage.getItem("token");
+
+      // Get current month (0-based, so add 1) and year
+      const now = new Date();
+      const month = now.getMonth() + 1;
+      const year = now.getFullYear();
+
       const response = await axios.get(
-        getApiUrl('/pg/my-groups'),
+        getApiUrl(`/pg/my-groups?month=${month}&year=${year}`),
         {
           headers: {
             Authorization: `Bearer ${token}`,

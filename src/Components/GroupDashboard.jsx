@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence} from "framer-motion";
 import axios from "axios";
 import { toast } from "react-hot-toast";
@@ -32,77 +33,76 @@ import { MemberList } from "./MemberList";
 function MemberExpensesModal({ isOpen, onClose, member, expenses }) {
   if (!isOpen || !member) return null;
 
-  return (
-  <AnimatePresence>
-  <motion.div
-    className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xl p-4"
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    exit={{ opacity: 0 }}
-    onClick={onClose}
-  >
-    <motion.div
-      className="bg-[#1E1E1E]/90 backdrop-blur-xl rounded-3xl shadow-[0_8px_40px_rgba(0,0,0,0.6)] w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col border border-[#2A2A2A]"
-      initial={{ scale: 0.95, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      exit={{ scale: 0.95, opacity: 0 }}
-      transition={{ duration: 0.25 }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      {/* Header */}
-      <div className="sticky top-0 bg-[#1E1E1E]/80 backdrop-blur-md p-4 border-b border-[#2A2A2A] flex justify-between items-center">
-        <h3 className="text-xl font-semibold text-gray-100 tracking-wide flex items-center gap-2">
-          <Users className="w-5 h-5 text-indigo-400" />
-          {member.name || member.username || member.userId}’s Expenses
-        </h3>
-        <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-200 transition">
-          <X className="w-5 h-5" />
-        </button>
-      </div>
-
-      {/* Expense list */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-3">
-        {expenses.length === 0 ? (
-          <div className="text-center text-gray-500 py-10 text-sm">
-            No expenses found.
+  return createPortal(
+    <AnimatePresence>
+      <motion.div
+        className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xl p-4"
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        onClick={onClose}
+      >
+        <motion.div
+          className="bg-[#1E1E1E]/90 backdrop-blur-xl rounded-3xl shadow-[0_8px_40px_rgba(0,0,0,0.6)] w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col border border-[#2A2A2A]"
+          initial={{ scale: 0.95, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          exit={{ scale: 0.95, opacity: 0 }}
+          transition={{ duration: 0.25 }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* Header */}
+          <div className="sticky top-0 bg-[#1E1E1E]/80 backdrop-blur-md p-4 border-b border-[#2A2A2A] flex justify-between items-center">
+            <h3 className="text-xl font-semibold text-gray-100 tracking-wide flex items-center gap-2">
+              <Users className="w-5 h-5 text-indigo-400" />
+              {member.name || member.username || member.userId}’s Expenses
+            </h3>
+            <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-200 transition">
+              <X className="w-5 h-5" />
+            </button>
           </div>
-        ) : (
-          [...expenses].reverse().map((expense) => (
-            <motion.div
-              key={expense.id || expense._id}
-              className="p-4 rounded-2xl border border-[#2A2A2A] bg-gradient-to-br from-[#1C1C1C] to-[#111111] hover:shadow-[0_0_15px_rgba(255,255,255,0.05)] transition-all flex justify-between items-center flex-col"
-              whileHover={{ scale: 1.02 }}
-            >
-              <div className="flex justify-between w-full items-center">
-                <span className="font-medium text-gray-100">{expense.description}</span>
-                <span className="font-semibold text-green-400">₹{expense.amount}</span>
+
+          {/* Expense list */}
+          <div className="flex-1 overflow-y-auto p-5 space-y-3">
+            {expenses.length === 0 ? (
+              <div className="text-center text-gray-500 py-10 text-sm">
+                No expenses found.
               </div>
+            ) : (
+              [...expenses].reverse().map((expense) => (
+                <motion.div
+                  key={expense.id || expense._id}
+                  className="p-4 rounded-2xl border border-[#2A2A2A] bg-gradient-to-br from-[#1C1C1C] to-[#111111] hover:shadow-[0_0_15px_rgba(255,255,255,0.05)] transition-all flex justify-between items-center flex-col"
+                  whileHover={{ scale: 1.02 }}
+                >
+                  <div className="flex justify-between w-full items-center">
+                    <span className="font-medium text-gray-100">{expense.description}</span>
+                    <span className="font-semibold text-green-400">₹{expense.amount}</span>
+                  </div>
 
-              <div className="flex justify-between w-full mt-1 text-xs text-gray-500">
-                <span>{new Date(expense.paymentDate).toLocaleDateString()}</span>
-              </div>
+                  <div className="flex justify-between w-full mt-1 text-xs text-gray-500">
+                    <span>{new Date(expense.paymentDate).toLocaleDateString()}</span>
+                  </div>
 
-              {expense.tags && expense.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2 w-full">
-                  {expense.tags.map((tag, idx) => (
-                    <span
-                      key={idx}
-                      className="px-2 py-0.5 bg-indigo-900/40 text-indigo-300 rounded-full text-xs font-medium border border-indigo-800/50"
-                    >
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </motion.div>
-          ))
-        )}
-      </div>
-    </motion.div>
-  </motion.div>
-</AnimatePresence>
-
-
+                  {expense.tags && expense.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2 w-full">
+                      {expense.tags.map((tag, idx) => (
+                        <span
+                          key={idx}
+                          className="px-2 py-0.5 bg-indigo-900/40 text-indigo-300 rounded-full text-xs font-medium border border-indigo-800/50"
+                        >
+                          #{tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </motion.div>
+              ))
+            )}
+          </div>
+        </motion.div>
+      </motion.div>
+    </AnimatePresence>,
+    document.body
   );
 }
 

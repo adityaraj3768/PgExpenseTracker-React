@@ -52,6 +52,7 @@ export const AddExpenseModal = ({ isOpen, onClose, onCelebrate, onQuickAdd }) =>
     "burger",
     "cold drink",
     "fast food",
+    "juice",
 
     // 🏠 Hostel / PG Essentials
     "rent",
@@ -97,11 +98,22 @@ export const AddExpenseModal = ({ isOpen, onClose, onCelebrate, onQuickAdd }) =>
 
   // Helper function to get group ID
   const getGroupId = (group) => group?.groupCode || group?.code || group?.id;
+  // Helper to get numeric group id (preferred for backend payload expecting List<Integer>)
+  const getGroupNumericId = (group) => {
+    // prefer explicit numeric id fields
+    if (!group) return null;
+    if (typeof group.id === "number") return group.id;
+    if (typeof group.groupId === "number") return group.groupId;
+    // sometimes id can be a numeric string
+    const candidate = group.id ?? group.groupId ?? group._id ?? group.code ?? group.groupCode;
+    const n = Number(candidate);
+    return Number.isFinite(n) ? n : null;
+  };
 
   useEffect(() => {
     if (isOpen) {
       setSelectedDate(new Date().toISOString().split("T")[0]);
-      // Fetch groups immediately when modal opens
+      // Fetch groups immediately when mo  dal opens
       fetchAllGroups();
     } else {
       // Reset state when modal closes
@@ -138,16 +150,17 @@ export const AddExpenseModal = ({ isOpen, onClose, onCelebrate, onQuickAdd }) =>
       return;
     }
     if (amount && tags.length > 0 && selectedDate && currentGroup) {
-      const groupCodes = [
-        getGroupId(currentGroup),
-        ...selectedGroupsForExpense.map((group) => getGroupId(group)),
-      ];
+      // send numeric group IDs to backend (List<Integer> groupIds)
+      const groupIds = [
+        getGroupNumericId(currentGroup),
+        ...selectedGroupsForExpense.map((group) => getGroupNumericId(group)),
+      ].filter((g) => g !== null && typeof g !== "undefined");
 
       const expense = {
         amount: Math.round(parseFloat(amount) * 100) / 100,
         paymentDate: selectedDate,
         tags: tags.filter((tag) => tag.trim() !== ""),
-        groupCodes: groupCodes,
+        groupIds: groupIds,
       };
 
       try {
@@ -194,7 +207,7 @@ export const AddExpenseModal = ({ isOpen, onClose, onCelebrate, onQuickAdd }) =>
         if (setMonthlyLimit && typeof data.user?.monthlyLimitCoins !== "undefined") {
           setMonthlyLimit(data.user.monthlyLimitCoins);
         }
-        const totalGroups = groupCodes.length;
+  const totalGroups = (groupIds || []).length;
         // Calculate and show time taken
         const timeTakenMs = Date.now() - addStartTime;
         const timeTakenSec = timeTakenMs / 1000;

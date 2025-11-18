@@ -430,7 +430,11 @@ export function GroupDashboard() {
     setIsDeleting(true);
 
     try {
-      const response = await axios.delete(getApiUrl(`/pg/delete/expense/${expenseId}`), {
+      const groupId = currentGroup?.id ?? currentGroup?.groupId ?? currentGroup?.groupCode ?? currentGroup?.code;
+      const url = groupId
+        ? getApiUrl(`/pg/delete/expense/${expenseId}/group/${groupId}`)
+        : getApiUrl(`/pg/delete/expense/${expenseId}`);
+      const response = await axios.delete(url, {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = response.data;
@@ -566,6 +570,20 @@ export function GroupDashboard() {
     currentGroup?.users,
     getUserExpenses,
   ]);
+
+  // First name of current user for friendly messages
+  const currentUserFirstName = useMemo(() => {
+    try {
+      const user = (currentGroup?.users || []).find(
+        (u) => String(u.userId) === String(currentUserId)
+      );
+      const fullName = user?.name || user?.username || null;
+      if (!fullName) return "You";
+      return String(fullName).split(" ")[0];
+    } catch (e) {
+      return "You";
+    }
+  }, [currentGroup?.users, currentUserId]);
 
   /**
    * Calculate each user's current month expenses for MemberList component
@@ -1537,7 +1555,7 @@ export function GroupDashboard() {
           <motion.div
             initial={{ opacity: 0, y: -10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.5 }}
+            transition={{ delay: 0.2, duration: 1, ease: "easeOut", repeat: Infinity, repeatType: "reverse" }}
             className="z-10"
           >
             <span className="text-2xl">✨</span>
@@ -1545,16 +1563,17 @@ export function GroupDashboard() {
 
           {/* Title */}
           <h3 className="text-2xl font-extrabold bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-600 bg-clip-text text-transparent z-10 mt-2 tracking-tight text-center">
-            Lightning Fast!
+            Too Fast ⚡
           </h3>
 
           {/* Subtitle */}
           <p className="text-base text-gray-700 text-center mt-3 z-10 font-medium">
-            You added the expense in
+            <span className="font-extrabold text-blue-700 mr-1">{currentUserFirstName}!</span>
+            <span className="text-gray-700">Well done added in just </span>
             <span className="font-extrabold text-blue-700 mx-1 text-lg">
               {(quickAddTime / 1000).toFixed(2)}s
             </span>
-            <span className="ml-1 text-lg">🎉</span>
+            
           </p>
           <div className="mt-4 z-10">
             <span className="inline-block px-4 py-2 rounded-full bg-gradient-to-r from-blue-100 to-purple-100 text-blue-700 font-semibold shadow-md animate-bounce">

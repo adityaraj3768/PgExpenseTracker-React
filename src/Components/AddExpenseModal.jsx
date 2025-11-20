@@ -17,6 +17,15 @@ import { useGroup } from "../Context/GroupContext";
 import { getApiUrl } from "../Utils/api";
 import { toast } from "react-hot-toast";
 
+// Per-group-type colors (used for border/text emphasis)
+const COLORS = {
+  FRIENDS: { border: 'border-blue-300', selectedBorder: 'border-blue-600', text: 'text-blue-700', selectedText: 'text-blue-800', bg: 'bg-blue-100' },
+  FAMILY: { border: 'border-green-300', selectedBorder: 'border-green-600', text: 'text-green-700', selectedText: 'text-green-800', bg: 'bg-green-100' },
+  TRIP: { border: 'border-purple-300', selectedBorder: 'border-purple-600', text: 'text-purple-700', selectedText: 'text-purple-800', bg: 'bg-purple-100' },
+  PERSONAL: { border: 'border-yellow-300', selectedBorder: 'border-yellow-600', text: 'text-yellow-700', selectedText: 'text-yellow-800', bg: 'bg-yellow-100' },
+  OTHERS: { border: 'border-gray-300', selectedBorder: 'border-gray-600', text: 'text-gray-700', selectedText: 'text-gray-800', bg: 'bg-gray-100' },
+};
+
 export const AddExpenseModal = ({ isOpen, onClose, onCelebrate, onQuickAdd }) => {
   const [amount, setAmount] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
@@ -774,19 +783,18 @@ export const AddExpenseModal = ({ isOpen, onClose, onCelebrate, onQuickAdd }) =>
                                     getGroupId(selectedGroup) === groupId
                                 );
 
+                                const typeKey = (group.groupType || group.type || group.group_type || '').toString().toUpperCase() || 'OTHERS';
+                                const c = COLORS[typeKey] || COLORS.OTHERS;
+
                                 return (
                                   <button
                                     key={groupId}
                                     type="button"
                                     onClick={() => toggleGroupSelection(group)}
-                                    className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-                                      isSelected
-                                        ? "bg-blue-100 text-blue-800 border border-blue-300"
-                                        : "bg-gray-100 text-gray-700 border border-gray-300 hover:bg-gray-200"
-                                    }`}
+                                    className={`inline-flex items-center px-3 py-2 rounded-lg text-sm font-medium transition-all border-2 ${isSelected ? (c.selectedBorder || c.border) : (c.border || 'border-gray-300')} ${isSelected ? (c.selectedText || c.text) : 'text-gray-700'} bg-white hover:bg-gray-50`}
                                   >
                                     {isSelected && (
-                                      <Check className="h-3 w-3 mr-1" />
+                                      <Check className={`h-3 w-3 mr-1 ${c.text}`} />
                                     )}
                                     {group.groupName ||
                                       group.name ||

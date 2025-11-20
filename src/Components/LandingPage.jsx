@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import {Plus,Users,ArrowRight,TrendingUp,LogIn,LogOut,User,} from 'lucide-react';
+import {Plus,Users,ArrowRight,TrendingUp,LogIn,LogOut,User,Globe,Plane,Home,} from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 import CreateGroupForm from './CreateGroupModal';
@@ -319,6 +319,50 @@ export function LandingPage({
   );
 }
 
+// Reuse COLORS mapping used in CreateGroupModal/AddExpenseModal
+const COLORS = {
+  FRIENDS: {
+    bg: "bg-blue-100",
+    hover: "hover:bg-blue-200",
+    border: "border-blue-300",
+    text: "text-blue-700",
+    activeBg: "bg-blue-600",
+    activeText: "text-white",
+  },
+  FAMILY: {
+    bg: "bg-green-100",
+    hover: "hover:bg-green-200",
+    border: "border-green-300",
+    text: "text-green-700",
+    activeBg: "bg-green-600",
+    activeText: "text-white",
+  },
+  TRIP: {
+    bg: "bg-purple-100",
+    hover: "hover:bg-purple-200",
+    border: "border-purple-300",
+    text: "text-purple-700",
+    activeBg: "bg-purple-600",
+    activeText: "text-white",
+  },
+  PERSONAL: {
+    bg: "bg-yellow-100",
+    hover: "hover:bg-yellow-200",
+    border: "border-yellow-300",
+    text: "text-yellow-700",
+    activeBg: "bg-yellow-500",
+    activeText: "text-white",
+  },
+  OTHERS: {
+    bg: "bg-gray-100",
+    hover: "hover:bg-gray-200",
+    border: "border-gray-300",
+    text: "text-gray-700",
+    activeBg: "bg-gray-600",
+    activeText: "text-white",
+  },
+};
+
 function GroupSelectionModal({ groups, onSelectGroup, onClose }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-black/40">
@@ -342,28 +386,55 @@ function GroupSelectionModal({ groups, onSelectGroup, onClose }) {
           </p>
 
           <div className="space-y-3 max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-1">
-            {groups.map((group) => (
-              <div
-                key={group.id}
-                onClick={() => onSelectGroup(group)}
-                className="p-4 border border-gray-200 rounded-xl hover:bg-blue-50 hover:border-blue-400 cursor-pointer transition-all duration-200 group"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex flex-col">
-                    <h3 className="text-lg font-medium text-gray-900 group-hover:text-blue-700">
-                      {group.groupName}
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                      Code: <span className="font-mono">{group.groupCode}</span>
-                    </p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {group.users?.length || 0} member{group.users?.length !== 1 ? 's' : ''}
-                    </p>
+            {(() => {
+              if (!Array.isArray(groups) || groups.length === 0) return <div className="text-sm text-gray-500">No groups available</div>;
+
+              // Desired order: Personal, Friends, Trip, Family, Others
+              const order = ["PERSONAL", "FRIENDS", "TRIP", "FAMILY", "OTHERS"];
+              const normalizeType = (g) => {
+                const t = (g.groupType || g.type || g.group_type || "").toString().toUpperCase();
+                return order.includes(t) ? t : "OTHERS";
+              };
+
+              const sorted = [...groups].sort((a, b) => order.indexOf(normalizeType(a)) - order.indexOf(normalizeType(b)));
+
+              return sorted.map((group) => {
+                const typeKey = normalizeType(group);
+                const c = COLORS[typeKey] || COLORS.OTHERS;
+                const Icon =
+                  typeKey === "FRIENDS"
+                    ? Users
+                    : typeKey === "TRIP"
+                    ? Plane
+                    : typeKey === "PERSONAL"
+                    ? User
+                    : typeKey === "FAMILY"
+                    ? Home
+                    : Globe;
+
+                return (
+                  <div
+                    key={group.id || group.groupCode || group.code}
+                    onClick={() => onSelectGroup(group)}
+                    className={`p-4 bg-white border ${c.border || 'border-gray-200'} rounded-xl cursor-pointer transition-all duration-200 hover:scale-[1.01] flex items-center justify-between gap-4`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <h3 className={`text-lg font-medium text-gray-900`}>{group.groupName || group.name || 'Unnamed Group'}</h3>
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${c.border || 'border-gray-200'} ${c.text || 'text-gray-700'} ${c.bg || 'bg-gray-100'}`}>{typeKey.charAt(0) + typeKey.slice(1).toLowerCase()}</span>
+                        </div>
+                        <p className="text-xs text-black-600 mt-1">{group.users?.length || 0} member{(group.users?.length || 0) !== 1 ? 's' : ''}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Icon className={`h-7 w-7 md:h-7 md:w-7 ${c.text}`} />
+                      <ArrowRight className="w-5 h-5 text-gray-400" />
+                    </div>
                   </div>
-                  <ArrowRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" />
-                </div>
-              </div>
-            ))}
+                );
+              });
+            })()}
           </div>
         </div>
 

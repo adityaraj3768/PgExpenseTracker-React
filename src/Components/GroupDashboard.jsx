@@ -14,6 +14,10 @@ import {
   Copy,
   Check,
   Pencil,
+  Globe,
+  Plane,
+  Home,
+  User,
   ArrowLeftRight,
 } from "lucide-react";
 import { useNavigate } from 'react-router-dom';
@@ -24,6 +28,15 @@ import { useGroup } from "../Context/GroupContext";
 import { useUser } from "../Context/CurrentUserIdContext";
 import { calculateBalances, getTotalExpenses } from "../Utils/Calculation";
 import { getApiUrl } from "../Utils/api";
+
+// Per-group-type visual styles used for header icon
+const GROUP_TYPE_STYLES = {
+  FRIENDS: { bg: 'bg-gradient-to-r from-blue-500 to-indigo-600', text: 'text-white', border: 'border-blue-300' },
+  FAMILY: { bg: 'bg-gradient-to-r from-green-500 to-green-600', text: 'text-white', border: 'border-green-300' },
+  TRIP: { bg: 'bg-gradient-to-r from-purple-500 to-purple-600', text: 'text-white', border: 'border-purple-300' },
+  PERSONAL: { bg: 'bg-gradient-to-r from-yellow-400 to-yellow-500', text: 'text-white', border: 'border-yellow-300' },
+  OTHERS: { bg: 'bg-gray-200', text: 'text-gray-700', border: 'border-gray-300' },
+};
 
 // Components
 
@@ -227,6 +240,29 @@ export function GroupDashboard() {
   const [showEditGroupName, setShowEditGroupName] = useState(false);
   const [newGroupName, setNewGroupName] = useState("");
   const [editingGroupName, setEditingGroupName] = useState(false);
+  // selected group type for edit modal
+  const [selectedGroupType, setSelectedGroupType] = useState("");
+  // control for modern dropdown in modal
+  const [showTypePicker, setShowTypePicker] = useState(false);
+
+  // Type options and helpers for icon and label
+  const TYPE_OPTIONS = [
+    { key: 'PERSONAL', label: 'Personal' },
+    { key: 'FRIENDS', label: 'Friends' },
+    { key: 'TRIP', label: 'Trip' },
+    { key: 'FAMILY', label: 'Family' },
+    { key: 'OTHERS', label: 'Others' },
+  ];
+
+  const getIconForType = (type) => {
+    const t = String(type || '').toUpperCase();
+    if (t === 'FRIENDS') return Users;
+    if (t === 'TRIP') return Plane;
+    if (t === 'PERSONAL') return User;
+    if (t === 'FAMILY') return Home;
+    return Globe;
+  };
+  
 
   // Delete confirmation modal state
   const [expenseToDelete, setExpenseToDelete] = useState(null);
@@ -256,6 +292,11 @@ export function GroupDashboard() {
   const { currentGroup, fetchGroup, fetchInitialGroup, currentBalance } =
     useGroup();
   const { currentUserId } = useUser();
+
+  // Modal-level fallback for current type to avoid recomputing and ensure a non-null value
+  const modalCurrentType = (currentGroup?.groupType || currentGroup?.type || currentGroup?.group_type || 'OTHERS')
+    .toString()
+    .toUpperCase();
 
   // Invalidate previous-month cache when group expenses change (e.g. expense added/deleted).
   // We watch the length so we only clear when an expense is added/removed.
@@ -837,25 +878,39 @@ export function GroupDashboard() {
             {/* Group Information */}
             <div className="flex items-center">
               <div className="relative mr-3">
-                <div className="p-2 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg">
-                  {/* Only allow opening members popup when there are multiple users */}
-                  { (currentGroup?.users?.length || 0) > 1 ? (
-                    <button
-                      onClick={() => setShowMembersPopup(true)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') setShowMembersPopup(true);
-                      }}
-                      aria-label="Show members"
-                      title="Show members"
-                      className="inline-flex items-center justify-center p-0 m-0"
-                    >
-                      <Users className="h-6 w-6 text-white" />
-                    </button>
-                  ) : (
-                    // If single-member, show icon without button (no popup)
-                    <Users className="h-6 w-6 text-white" />
-                  )}
-                </div>
+                {(() => {
+                  // Choose icon + styles based on group type
+                  const typeKey = (currentGroup?.groupType || currentGroup?.type || currentGroup?.group_type || '').toString().toUpperCase() || 'OTHERS';
+                  const Icon =
+                    typeKey === 'FRIENDS' ? Users :
+                    typeKey === 'TRIP' ? Plane :
+                    typeKey === 'PERSONAL' ? User :
+                    typeKey === 'FAMILY' ? Home :
+                    Globe;
+                  const style = GROUP_TYPE_STYLES[typeKey] || GROUP_TYPE_STYLES.OTHERS;
+
+                  return (
+                    <div className={`p-2 ${style.bg} rounded-lg border ${style.border}`}>
+                      {/* Only allow opening members popup when there are multiple users */}
+                      { (currentGroup?.users?.length || 0) > 1 ? (
+                        <button
+                          onClick={() => setShowMembersPopup(true)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') setShowMembersPopup(true);
+                          }}
+                          aria-label="Show members"
+                          title="Show members"
+                          className="inline-flex items-center justify-center p-0 m-0"
+                        >
+                          <Icon className={`h-6 w-6 ${style.text}`} />
+                        </button>
+                      ) : (
+                        // If single-member, show icon without button (no popup)
+                        <Icon className={`h-6 w-6 ${style.text}`} />
+                      )}
+                    </div>
+                  );
+                })()}
                 {/* Member count badge (only when more than 1 member) */}
                 { (currentGroup?.users?.length || 0) > 1 && (
                   <span
@@ -875,6 +930,11 @@ export function GroupDashboard() {
                     onClick={() => {
                       setShowEditGroupName(true);
                       setNewGroupName(currentGroup.groupName || "");
+                      setSelectedGroupType(
+                        (currentGroup?.groupType || currentGroup?.type || currentGroup?.group_type || 'OTHERS')
+                          .toString()
+                          .toUpperCase()
+                      );
                     }}
                   >
                     <Pencil size={16} />
@@ -941,6 +1001,61 @@ export function GroupDashboard() {
               disabled={editingGroupName}
               placeholder="Enter new group name"
             />
+            {/* Group Type Picker (modern dropdown with icons) */}
+            <div className="mb-4">
+              <label className="block text-sm text-gray-700 mb-1">Group Type</label>
+              <div className="relative">
+                {/* Selected */}
+                {(() => {
+                  const active = (selectedGroupType && String(selectedGroupType).toUpperCase()) || modalCurrentType;
+                  const Icon = getIconForType(active);
+                  const label = TYPE_OPTIONS.find(o => o.key === active)?.label || active;
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => setShowTypePicker(s => !s)}
+                      disabled={editingGroupName}
+                      className="w-full flex items-center justify-between gap-2 px-3 py-2 border border-gray-300 rounded bg-white hover:shadow-sm focus:outline-none"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-center h-6 w-6 rounded text-gray-700">
+                          <Icon className="h-5 w-5 text-gray-600" />
+                        </div>
+                        <span className="text-sm text-gray-800">{label}</span>
+                      </div>
+                      <svg className={`h-4 w-4 text-gray-500 transform ${showTypePicker ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M6 8L10 12L14 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </button>
+                  );
+                })()}
+
+                {/* Options */}
+                {showTypePicker && (
+                  <div className="absolute left-0 right-0 mt-2 bg-white border border-gray-200 rounded shadow-lg z-50 overflow-hidden">
+                    {TYPE_OPTIONS.map(opt => {
+                      const Icon = getIconForType(opt.key);
+                      const activeKey = (selectedGroupType && String(selectedGroupType).toUpperCase()) || modalCurrentType;
+                      const isSelected = activeKey === opt.key;
+                      return (
+                        <button
+                          key={opt.key}
+                          type="button"
+                          onClick={() => {
+                            setSelectedGroupType(opt.key);
+                            setShowTypePicker(false);
+                          }}
+                          className={`w-full text-left px-3 py-2 flex items-center gap-3 hover:bg-gray-50 ${isSelected ? 'bg-blue-50' : ''}`}
+                        >
+                          <Icon className={`h-5 w-5 ${isSelected ? 'text-blue-600' : 'text-gray-500'}`} />
+                          <span className={`text-sm ${isSelected ? 'font-semibold text-blue-700' : 'text-gray-800'}`}>{opt.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
             <div className="flex justify-end gap-2">
               <button
                 onClick={() => setShowEditGroupName(false)}
@@ -951,31 +1066,45 @@ export function GroupDashboard() {
               </button>
               <button
                 onClick={async () => {
-                  if (!newGroupName.trim()) return;
+                  // Allow save when either name or type changed. If name is empty, use existing group name.
+                  const currentType = (currentGroup?.groupType || currentGroup?.type || currentGroup?.group_type || 'OTHERS').toString().toUpperCase();
+                  const nameToSend = newGroupName.trim() || currentGroup.groupName || "";
+                  // If nothing changed (name same and type same), do nothing
+                  if (!nameToSend && selectedGroupType === currentType) return;
                   setEditingGroupName(true);
                   try {
                     const token = localStorage.getItem("token");
+                    const finalGroupType = (selectedGroupType && String(selectedGroupType).trim()) ? selectedGroupType : currentType;
+                    const payload = {
+                      newGroupName: nameToSend,
+                      groupCode: currentGroup.groupCode,
+                      groupType: finalGroupType,
+                    };
+                    console.log("Updating group with payload:", payload);
                     const response = await axios.post(
                       getApiUrl("/pg/update-group-name"),
-                      {
-                        newGroupName: newGroupName.trim(),
-                        groupCode: currentGroup.groupCode,
-                      },
+                      payload,
                       { headers: { Authorization: `Bearer ${token}` } }
                     );
-                    // Update group name in context/state
+                    // Update group in context/state
                     if (response.data) {
-                      currentGroup.groupName = response.data;
-                      toast.success("Group name updated!");
+                      currentGroup.groupName = response.data.groupName || nameToSend;
+                      currentGroup.groupType = response.data.groupType || selectedGroupType || currentType;
+                      try {
+                        setCurrentGroup({ ...currentGroup });
+                        localStorage.setItem("currentGroup", JSON.stringify(currentGroup));
+                      } catch (e) {}
+                      toast.success("Group updated!");
                     }
                     setShowEditGroupName(false);
                   } catch (err) {
-                    toast.error("Failed to update group name");
+                    console.error(err);
+                    toast.error("Failed to update group");
                   } finally {
                     setEditingGroupName(false);
                   }
                 }}
-                disabled={editingGroupName || !newGroupName.trim()}
+                disabled={editingGroupName}
                 className="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 font-medium transition-colors"
               >
                 {editingGroupName ? (
@@ -1194,7 +1323,7 @@ export function GroupDashboard() {
                 >
                   <div className="flex-1 min-w-0">
                     <p className="text-xs sm:text-sm text-gray-600">Give/Take</p>
-                    <p className="text-lg sm:text-2xl font-bold text-blue-700 mt-1">Track Now</p>
+                    <p className="text-lg sm:text-2xl font-bold text-blue-700 mt-1">Khata</p>
                   </div>
                   <ArrowLeftRight className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600 flex-shrink-0" />
                 </div>

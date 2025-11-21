@@ -381,9 +381,9 @@ function GroupSelectionModal({ groups, onSelectGroup, onClose }) {
 
         {/* Modal Content */}
         <div className="p-6">
-          <p className="text-gray-600 text-sm mb-4">
+          {/* <p className="text-gray-600 text-sm mb-4">
             You’re part of multiple groups. Please choose one to continue:
-          </p>
+          </p> */}
 
           <div className="space-y-3 max-h-60 overflow-y-auto scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 pr-1">
             {(() => {
@@ -429,7 +429,7 @@ function GroupSelectionModal({ groups, onSelectGroup, onClose }) {
                     </div>
                     <div className="flex items-center gap-3">
                       <Icon className={`h-7 w-7 md:h-7 md:w-7 ${c.text}`} />
-                      <ArrowRight className="w-5 h-5 text-gray-400" />
+                      <ArrowRight className="w-5 h-5 text-black-400" />
                     </div>
                   </div>
                 );

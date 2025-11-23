@@ -63,7 +63,13 @@ export const ExpenseList = ({ expenses, onExpenseDeleted, onDeleteRequest }) => 
 
   // Wrapper used by the delete button to enforce frontend authorization
   const handleDeleteClick = (expense) => {
-    if (currentUserId && expense.userId && expense.userId !== currentUserId) {
+    // Normalize and support a few possible shapes for the stored user id so
+    // simple type differences (number vs string / ObjectId string) don't
+    // incorrectly block deletion on the frontend.
+    const expenseUserId =
+      expense?.userId ?? expense?.user?._id ?? expense?.user ?? null;
+
+    if (currentUserId && expenseUserId && String(expenseUserId) !== String(currentUserId)) {
       toast.error("You can only delete your own expenses");
       return;
     }

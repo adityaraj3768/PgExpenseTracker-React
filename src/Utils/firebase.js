@@ -34,37 +34,6 @@ export function getFirebaseAuth() {
 // ✅ Always export one shared auth
 export const auth = getAuth(app);
 
-// export function setupRecaptcha(containerId = "recaptcha-container") {
-//   const auth = getFirebaseAuth();
-//   if (!window.recaptchaVerifier) {
-//     const container = document.getElementById(containerId);
-//     if (!container) {
-//       console.error(`reCAPTCHA container with id '${containerId}' not found in DOM!`);
-//       throw new Error(`reCAPTCHA container with id '${containerId}' not found in DOM!`);
-//     }
-//     window.recaptchaVerifier = new RecaptchaVerifier(
-//       containerId,
-//       {
-//         size: "invisible",
-//         callback: (response) => {
-//           console.log("reCAPTCHA solved ✅", response);
-//         },
-//         "expired-callback": () => {
-//           console.warn("reCAPTCHA expired ❌. Please try again.");
-//         }
-//       },
-//       auth // This is correct
-//     );
-//     // ...
-//   }
-//   return window.recaptchaVerifier;
-// }
-
-// ✅ Send OTP
-// 1: enter phone, 2: enter OTP
-
-
-
 const setupRecaptcha = () => {
   console.log("this is setup recaptcha function");
   if (!window.recaptchaVerifier) {
@@ -116,18 +85,20 @@ const verifyOtp = () => {
   };
 
 
-// === PUSH NOTIFICATIONS ===
 
-const messaging = getMessaging(app);
+// === PUSH NOTIFICATIONS === 
+
+export const messaging = getMessaging(app);
 
 // Check if notification setup is needed on app startup
-export async function checkNotificationSetup(userId, fetchGroupsFn) {
+export async function checkNotificationSetup(userId) {
   // Only run this check if user is already logged in
   const authToken = localStorage.getItem("token");
   if (!authToken || !userId) {
     console.log("No auth token or userId - skipping notification check");
     return;
   }
+
 
   const NOTIFICATION_PERMISSION_KEY = "notificationPermissionRequested";
   const hasRequestedBefore = localStorage.getItem(NOTIFICATION_PERMISSION_KEY);
@@ -138,7 +109,7 @@ export async function checkNotificationSetup(userId, fetchGroupsFn) {
   if (permission === "default" && !hasRequestedBefore) {
     // User hasn't been asked yet - set up notifications
     console.log("Setting up notifications for already logged in user");
-    await registerDeviceForNotifications(userId, fetchGroupsFn);
+    await registerDeviceForNotifications(userId);
   } else if (permission === "granted") {
     // User already granted permission, check if device is registered
     const deviceRegistered = localStorage.getItem(
@@ -146,66 +117,49 @@ export async function checkNotificationSetup(userId, fetchGroupsFn) {
     );
     if (!deviceRegistered) {
       console.log("Re-registering device for already logged in user");
-      await registerDeviceForNotifications(userId, fetchGroupsFn);
+      await registerDeviceForNotifications(userId);
     }
   }
 }
 
-export async function registerDeviceForNotifications(userId, fetchGroupsFn) {
+export async function registerDeviceForNotifications(userId) {
   try {
     // Check if the browser supports service workers and push notifications
-    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
-      console.log("Push notifications are not supported by this browser");
+    if (!('serviceWorker' in navigator) || typeof PushManager === 'undefined') {
+      console.log('Push notifications are not supported by this browser');
       return;
     }
 
     // Register service worker
     let registration;
     try {
-      // First, try to get existing registration
-      registration = await navigator.serviceWorker.getRegistration(
-        "/firebase-messaging-sw.js"
+      // Try to find any registration whose scriptURL ends with our SW filename
+      const regs = await navigator.serviceWorker.getRegistrations();
+      registration = regs.find(
+        (r) => (r?.scriptURL || '') .endsWith('/firebase-messaging-sw.js')
       );
 
       if (!registration) {
         // If no existing registration, create new one
-        registration = await navigator.serviceWorker.register(
-          "/firebase-messaging-sw.js"
-        );
-        console.log("New Service Worker registered");
-
-        // Wait for the service worker to be ready and active
-        await registration.ready;
-
-        // Additional wait to ensure service worker is fully loaded
-        if (registration.installing) {
-          await new Promise((resolve) => {
-            registration.installing.addEventListener("statechange", (e) => {
-              if (e.target.state === "activated") {
-                resolve();
-              }
-            });
-          });
-        }
+        registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+        console.log('New Service Worker registered', registration);
       } else {
-        // Using existing Service Worker registration
-
-        // Ensure the service worker is ready
-        await registration.ready;
+        console.log('Found existing Service Worker registration', registration);
       }
 
-      // Verify that the service worker has pushManager
-      if (!registration.active) {
-        throw new Error("Service worker is not active");
+      // Wait until an active service worker is ready and controlling the page
+      registration = await navigator.serviceWorker.ready;
+
+      if (!registration || !registration.active) {
+        throw new Error('No active service worker after ready');
       }
 
-      // Double-check pushManager availability
-      const sw = registration.active;
-      if (!sw) {
-        throw new Error("No active service worker found");
+      // Confirm PushManager availability on the registration
+      if (!registration.pushManager) {
+        console.warn('PushManager not available on ServiceWorkerRegistration');
       }
     } catch (swError) {
-      console.error("Service Worker registration failed:", swError);
+      console.error('Service Worker registration failed:', swError);
       return;
     }
 
@@ -281,24 +235,11 @@ export async function registerDeviceForNotifications(userId, fetchGroupsFn) {
       }
     }
 
-    // Get all groups the user is part of
-    let groupCodes = [];
-    try {
-      const groups = await fetchGroupsFn();
-      if (Array.isArray(groups)) {
-        groupCodes = groups
-          .filter(
-            (group) => group && (group.groupCode || group.code || group.id)
-          )
-          .map((group) => group.groupCode || group.code || group.id);
-        // Group codes retrieved
-      } else {
-        console.warn("Invalid groups data received:", groups);
-      }
-    } catch (groupError) {
-      console.error("Error fetching groups:", groupError);
-      // Continue with empty array if group fetch fails
+    if (token) {
+      console.log('FCM token obtained:', token);
     }
+
+    
 
     // Get auth token
     const authToken = localStorage.getItem("token");
@@ -314,7 +255,7 @@ export async function registerDeviceForNotifications(userId, fetchGroupsFn) {
         {
           userId: userId,
           token: token, // Backend expects 'token' field
-          groupCodes: groupCodes,
+          
         },
         {
           headers: {

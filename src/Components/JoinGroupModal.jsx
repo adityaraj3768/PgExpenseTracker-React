@@ -3,11 +3,12 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { getApiUrl } from "../Utils/api";
 
-export default function JoinGroupModal({ onClose }) {
+export default function JoinGroupModal({ onClose, onEnterGroup }) {
   const [groupCode, setGroupCode] = useState('');
   const [userId,setUserId]=useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  const [joinedGroupCode, setJoinedGroupCode] = useState('');
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -31,7 +32,9 @@ export default function JoinGroupModal({ onClose }) {
         }
       );
 
-      setSuccessMessage(`Successfully joined group: ${response.data.groupName || groupCode}`);
+      const returnedCode = response.data?.groupCode || groupCode.trim();
+      setJoinedGroupCode(returnedCode);
+      setSuccessMessage(`Successfully joined group: ${response.data.groupName || returnedCode}`);
       setGroupCode('');
     } catch (error) {
       if (error.response && error.response.status === 409) {
@@ -81,12 +84,42 @@ export default function JoinGroupModal({ onClose }) {
           <>
             <h2 className="text-2xl font-bold text-green-600 mb-3">Joined Successfully!</h2>
             <p className="text-gray-700 mb-4">{successMessage}</p>
-            <button
-              onClick={onClose}
-              className="px-4 py-2 rounded-lg bg-gray-400 text-white hover:bg-gray-500"
-            >
-              Done
-            </button>
+            {joinedGroupCode ? (
+              <>
+                <div className="bg-gray-100 px-4 py-2 rounded text-lg font-mono mb-4">{joinedGroupCode}</div>
+                <div className="flex justify-center gap-3">
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(joinedGroupCode);
+                      } catch {}
+                    }}
+                    className="px-4 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-800"
+                  >
+                    Copy
+                  </button>
+                  <button
+                    onClick={() => {
+                      setJoinedGroupCode('');
+                      setSuccessMessage('');
+                      onClose();
+                      if (typeof onEnterGroup === 'function') onEnterGroup();
+                    }}
+                    className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
+                  >
+                    Enter Group
+                  </button>
+                </div>
+              </>
+            ) : (
+              <button
+                onClick={onClose}
+                className="px-4 py-2 rounded-lg bg-gray-400 text-white hover:bg-gray-500"
+              >
+                Done
+              </button>
+            )}
           </>
         )}
       </div>

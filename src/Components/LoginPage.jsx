@@ -7,6 +7,7 @@ import { useUser } from '../Context/CurrentUserIdContext';
 import { useGroup } from '../Context/GroupContext';
 import { getApiUrl, getBaseUrl } from "../Utils/api";
 import { registerDeviceForNotifications, sendOtp } from '../Utils/firebase';
+import { getDeviceToken } from '../Utils/getDeviceToken';
 
 export function LoginPage() {
   const [userId, setUserId] = useState('');
@@ -36,7 +37,7 @@ export function LoginPage() {
   }
 
   function onSuccesLogin(user) {
-    console.log('Logged in user:', user);
+    // console.log('Logged in user:', user);
   }
 
   const handleSubmit = async (e) => {
@@ -51,9 +52,20 @@ export function LoginPage() {
     }
 
     try {
+
+       // 1️⃣ Get FCM device token BEFORE login
+    let deviceToken = null;
+    try {
+      deviceToken = await getDeviceToken();
+    } catch (e) {
+      // console.log("Failed to get device token:", e);
+    }
+
+    
       const response = await axios.post(getApiUrl('/auth/login'), {
         userId,
         password,
+        deviceToken, // Include the device token in the login request
       });
 
       if (response.status === 200) {
@@ -64,13 +76,13 @@ export function LoginPage() {
         const user = jwtDecode(token);
         onSuccesLogin(user);
 
-        registerDeviceForNotifications(user.userId, fetchAllGroups);
+        registerDeviceForNotifications(user.userId);
         navigate('/');
       } else {
         setError('Login failed. Please try again.');
       }
     } catch (err) {
-      console.error('Login error:', err);
+      // console.error('Login error:', err);
       if (err.response && err.response.status === 401) {
         setError('Invalid credentials');
       } else {

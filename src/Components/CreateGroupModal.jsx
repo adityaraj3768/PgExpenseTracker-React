@@ -46,7 +46,7 @@ const COLORS = {
   },
 };
 
-export default function CreateGroupForm({ onClose }) {
+export default function CreateGroupForm({ onClose, onEnterGroup }) {
   const [groupName, setGroupName] = useState('');
   const [groupType, setGroupType] = useState('');
   const [groupCode, setGroupCode] = useState('');
@@ -212,10 +212,20 @@ export default function CreateGroupForm({ onClose }) {
               </button>
               <button
                 type="button"
-                onClick={() => { setGroupCode(''); onClose(); }}
+                onClick={() => {
+                  // If a landing-page enter handler is provided, call it so user can enter groups directly
+                  if (typeof onEnterGroup === 'function') {
+                    setGroupCode('');
+                    onClose();
+                    onEnterGroup();
+                  } else {
+                    setGroupCode('');
+                    onClose();
+                  }
+                }}
                 className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white"
               >
-                Done
+                Enter Group
               </button>
             </div>
           </>

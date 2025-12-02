@@ -11,6 +11,7 @@ import { useUser } from '../Context/CurrentUserIdContext';
 import { getApiUrl } from "../Utils/api";
 import { checkNotificationSetup } from '../Utils/firebase';
 
+import { getDeviceToken } from "../Utils/getDeviceToken";
 
 export function LandingPage({
   
@@ -33,6 +34,7 @@ export function LandingPage({
 
   const { setCurrentGroup, fetchAllGroups, setCoins, setMonthlyLimit, setRemainingCoins } = useGroup();
   const { currentUserId } = useUser();
+   
 
   // Check token on mount
   useEffect(() => {
@@ -43,10 +45,10 @@ export function LandingPage({
       // Check notification setup for already logged in users
       // If user is logged in, check notification setup
       if (currentUserId) {
-        checkNotificationSetup(currentUserId, fetchAllGroups);
+        checkNotificationSetup(currentUserId);
       }
     }
-  }, [currentUserId, fetchAllGroups]);
+  }, [currentUserId]);
 
   const handleLogin = () => {
     if (handleLoginClick) {
@@ -56,14 +58,40 @@ export function LandingPage({
     }
   };
 
-  const handleLogout = () => {
+  
+ const handleLogout = async () => {
+  let deviceToken = null;
+
+  try {
+    deviceToken = await getDeviceToken();
+  } catch (e) {
+    // console.log("Failed to get device token:", e);
+  }
+
+  try {
+    await axios.delete(
+      getApiUrl('/pg/logout'),
+      {
+        data: { deviceToken }, // IMPORTANT FIX
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+          'Content-Type': 'application/json',
+        },
+      }
+    );
+
+    // Logout only if API succeeds
     localStorage.removeItem('token');
     setToken(false);
-    if (onLogout) {
-      onLogout();
-    }
-  };
- 
+    if (onLogout) onLogout();
+
+  } catch (error) {
+    // console.log("Logout API error:", error.response?.data || error);
+    alert("Logout failed. Try again.");
+  }
+};
+
+
   //this will show the create group modal
   const onCreateGroup=()=>{
       setShowCreateGroupModal(true)
@@ -105,9 +133,9 @@ export function LandingPage({
         },
       });
       // Log the groups received from the backend
-      console.log('Groups received from backend:', response.data.groups);
-      console.log('Monthly Limit Coins:', response.data.monthlyLimitCoins);
-      console.log('Remaining Coins:', response.data.remainingCoins);
+      // console.log('Groups received from backend:', response.data.groups);
+      // console.log('Monthly Limit Coins:', response.data.monthlyLimitCoins);
+      // console.log('Remaining Coins:', response.data.remainingCoins);
       //this is the  all groups of the user that he belongs to
       const groups = response.data.groups;
 
@@ -124,12 +152,6 @@ export function LandingPage({
   }
 
 
-  // // Cache the groups data in localStorage
-  // // Save in localStorage for future use
-  //   localStorage.setItem(
-  //     'userGroupsData',
-  //     JSON.stringify({ groups, monthlyLimitCoins: coins })
-  //   );
 
       if (Array.isArray(groups) && groups.length > 0) {
         if (groups.length === 1) {
@@ -266,13 +288,17 @@ export function LandingPage({
       {/* //for rendering the create group form modal */}
      {showCreateGroupModal && (
   <CreateGroupForm
-    onClose={() => setShowCreateGroupModal(false)}/>
+    onClose={() => setShowCreateGroupModal(false)}
+    onEnterGroup={() => { setShowCreateGroupModal(false); handleEnterGroup(); }}
+  />
 )}
       {/* //for rendering the join group form modal */}
-     {showJoinGroupModal && (
-  <JoinGroupModal
-    onClose={() => setShowJoinGroupModal(false)}/>
-)}
+       {showJoinGroupModal && (
+    <JoinGroupModal
+      onClose={() => setShowJoinGroupModal(false)}
+      onEnterGroup={() => { setShowJoinGroupModal(false); handleEnterGroup(); }}
+    />
+  )}
 
       {/* Group Selection Modal */}
       {showGroupSelectionModal && (

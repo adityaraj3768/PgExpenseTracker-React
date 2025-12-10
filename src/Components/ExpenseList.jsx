@@ -1,27 +1,83 @@
-import { Trash, Hash, ReceiptIndianRupee,Search  } from "lucide-react";
+import { Trash, Hash, ReceiptIndianRupee, Search, Calendar } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
 import { getApiUrl } from "../Utils/api";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useUser } from "../Context/CurrentUserIdContext";
 import Fuse from "fuse.js";
 import { toast } from "react-hot-toast";
 
-export const ExpenseList = ({ expenses, onExpenseDeleted, onDeleteRequest }) => {
+export const ExpenseList = ({ expenses, onExpenseDeleted, onDeleteRequest, showCalendar, onShowCalendar, calendarBaseDate, groupType }) => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [deletingExpenseId, setDeletingExpenseId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const { currentUserId } = useUser();
 
-  // ✅ Fuse.js for fuzzy tag search
+  const placeholderTerms = ["chai",
+  "maggi",
+  "canteen",
+  "milk",
+  "Flipkart",];
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setPlaceholderIndex((prev) => (prev + 1) % placeholderTerms.length);
+    }, 2000);
+    return () => clearInterval(interval);
+  }, [placeholderTerms.length]);
+
+  // ✅ Step 1: Simple search (exact + contains)
+  const simpleSearch = (expenses, query) => {
+    if (!query) return expenses;
+    
+    const lowerQuery = query.toLowerCase().trim();
+    
+    return expenses.filter((expense) => {
+      // Search in description
+      const description = (expense.description || "").toLowerCase();
+      
+      // Search in tags
+      const tags = (expense.tags || []).map((tag) => tag.toLowerCase());
+      
+      // Search in paidBy
+      const paidBy = (expense.paidBy || "").toLowerCase();
+      
+      // Check if query matches (exact or contains)
+      return (
+        description.includes(lowerQuery) ||
+        tags.some((tag) => tag.includes(lowerQuery)) ||
+        paidBy.includes(lowerQuery)
+      );
+    });
+  };
+
+  // ✅ Step 2: Fuzzy search (Fuse.js)
   const fuse = new Fuse(expenses || [], {
-    keys: ["tags", "description"], // search in tags + description
+    keys: ["tags", "description", "paidBy"],
     threshold: 0.4,
   });
 
-  const filteredExpenses = searchTerm
-    ? fuse.search(searchTerm).map((result) => result.item)
-    : expenses;
+  const fuzzySearch = (expenses, query) => {
+    if (!query) return expenses;
+    return fuse.search(query).map((result) => result.item);
+  };
+
+  // ✅ Hybrid search: Try simple first, if no results → fuzzy
+  const filteredExpenses = (() => {
+    if (!searchTerm) return expenses;
+    
+    // Step 1: Try simple search
+    const simpleResults = simpleSearch(expenses, searchTerm);
+    
+    // If we found results with simple search, return them
+    if (simpleResults.length > 0) {
+      return simpleResults;
+    }
+    
+    // Step 2: No results? Try fuzzy search
+    return fuzzySearch(expenses, searchTerm);
+  })();
 
   const handleDelete = async (expenseId) => {
     // (Note) Authorization is checked by the click-wrapper before calling this.
@@ -86,61 +142,96 @@ export const ExpenseList = ({ expenses, onExpenseDeleted, onDeleteRequest }) => 
     new Map(filteredExpenses.map((e) => [e.id, e])).values()
   );
 
-  // ✅ sort newest first
-  const sortedExpenses = [...uniqueExpenses]
-    .map((expense, idx) => ({ ...expense, _originalIdx: idx }))
-    .sort((a, b) => {
-      const dateA = new Date(a.paymentDate);
-      const dateB = new Date(b.paymentDate);
-      if (dateA.getTime() === dateB.getTime()) {
-        return b._originalIdx - a._originalIdx;
-      }
-      return dateB - dateA;
-    });
+  // ✅ Sort by createdAt (newest first), fallback to paymentDate
+  const sortedExpenses = [...uniqueExpenses].sort((a, b) => {
+    // Prefer createdAt over paymentDate for sorting
+    const timeA = a.createdAt 
+      ? new Date(a.createdAt).getTime() 
+      : new Date(a.paymentDate).getTime();
+    
+    const timeB = b.createdAt 
+      ? new Date(b.createdAt).getTime() 
+      : new Date(b.paymentDate).getTime();
+    
+    // Sort newest first (descending order)
+    return timeB - timeA;
+  });
 
   return (
     <div className="relative">
-      {/* Search input with icon inside the input field */}
-      <div className="relative mb-4">
-        <span
-          className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors duration-200
-            ${searchTerm ? "text-blue-500 scale-110" : "text-gray-400"}
-            pointer-events-none
-          `}
-          aria-hidden="true"
-        >
-          <Search
-            className={`w-5 h-5 transition-transform duration-200
-              ${searchTerm ? "scale-125 animate-pulse" : ""}
+      {/* Search input with calendar button */}
+      <div className="mb-6 pb-4">
+        {/* Search input */}
+        <div className="relative flex-1">
+          <span
+            className={`absolute left-3 top-1/2 -translate-y-1/2 transition-colors duration-200
+              ${searchTerm ? "text-blue-500 scale-110" : "text-gray-400"}
+              pointer-events-none
             `}
-          />
-        </span>
-        <input
-          type="text"
-          placeholder="Search by chai, bread, Flipkart..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className={`w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg
-                 bg-white shadow-sm transition-all duration-300
-                 focus:outline-none focus:ring-2 focus:ring-blue-300
-                 focus:shadow-md focus:border-blue-400
-                 ${searchTerm ? "ring-2 ring-blue-400 border-blue-400" : ""}
-          `}
-          autoComplete="off"
-        />
-        {searchTerm && (
-          <button
-            type="button"
-            onClick={() => setSearchTerm("")}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors duration-200 p-1"
-            aria-label="Clear search"
-            tabIndex={0}
+            aria-hidden="true"
           >
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
+            <Search
+              className={`w-5 h-5 transition-transform duration-200
+                ${searchTerm ? "scale-125 animate-pulse" : ""}
+              `}
+            />
+          </span>
+          <div className="relative">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className={`w-full pl-10 pr-10 py-2 border border-gray-300 rounded-lg
+                     bg-transparent shadow-sm transition-all duration-300
+                     focus:outline-none focus:ring-2 focus:ring-blue-300
+                     focus:shadow-md focus:border-blue-400
+                     ${searchTerm ? "ring-2 ring-blue-400 border-blue-400" : ""}
+              `}
+              autoComplete="off"
+            />
+            {!searchTerm && (
+              <div className="absolute left-10 top-1/2 -translate-y-1/2 pointer-events-none overflow-hidden h-6 w-full">
+                <AnimatePresence mode="wait">
+                  <motion.span
+                    key={placeholderIndex}
+                    initial={{ y: 20, opacity: 0 }}
+                    animate={{ y: 0, opacity: 1 }}
+                    exit={{ y: -20, opacity: 0 }}
+                    transition={{ duration: 0.5, ease: "easeInOut" }}
+                    className="text-gray-500 absolute whitespace-nowrap block"
+                  >
+                    Search  "{placeholderTerms[placeholderIndex]}"
+                  </motion.span>
+                </AnimatePresence>
+              </div>
+            )}
+          </div>
+          {searchTerm && (
+            <button
+              type="button"
+              onClick={() => setSearchTerm("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-red-500 transition-colors duration-200 p-1"
+              aria-label="Clear search"
+              tabIndex={0}
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </div>
+
+        {/* Calendar/Timeline button */}
+        <div className="flex justify-end mt-3">
+          <button
+            onClick={() => onShowCalendar && onShowCalendar(calendarBaseDate || new Date())}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-black text-white rounded-md hover:bg-gray-800 transition-all text-xs"
+            title={groupType === "TRIP" ? "View trip timeline" : "View daily spending calendar"}
+          >
+            <Calendar className="w-3.5 h-3.5" />
+            <span>{groupType === "TRIP" ? "Timeline" : "Calendar"}</span>
           </button>
-        )}
+        </div>
       </div>
 
       {sortedExpenses.length === 0 ? (
@@ -155,7 +246,10 @@ export const ExpenseList = ({ expenses, onExpenseDeleted, onDeleteRequest }) => 
         </div>
       ) : (
         <AnimatePresence initial={false}>
-          {sortedExpenses.map((expense) => (
+          {sortedExpenses.map((expense) => {
+            const amt = Number(expense.amount);
+            const formattedAmt = Number.isFinite(amt) ? amt.toFixed(2) : "0.00";
+            return (
             <motion.div
               key={expense.id}
               initial={{ opacity: 0, y: -20 }}
@@ -230,7 +324,7 @@ export const ExpenseList = ({ expenses, onExpenseDeleted, onDeleteRequest }) => 
                 </div>
                 <div className="flex items-center space-x-2">
                   <p className="text-xl font-bold text-gray-900">
-                    ₹ {expense.amount.toFixed(2)}
+                    ₹ {formattedAmt}
                   </p>
                   <button
                     onClick={() => handleDeleteClick(expense)}
@@ -245,7 +339,8 @@ export const ExpenseList = ({ expenses, onExpenseDeleted, onDeleteRequest }) => 
                 </div>
               </div>
             </motion.div>
-          ))}
+          );
+          })}
         </AnimatePresence>
       )}
     </div>
@@ -263,7 +358,7 @@ function formatExpenseDateWithTime(paymentDateStr, createdAtStr) {
   const year = date.getFullYear();
   const currentYear = now.getFullYear();
 
-  // Format time from createdAt
+  // Format time from createdAt (24-hour format)
   let time = "";
   if (createdAtStr) {
     const createdAtDate = new Date(createdAtStr);
@@ -271,7 +366,7 @@ function formatExpenseDateWithTime(paymentDateStr, createdAtStr) {
       time = createdAtDate.toLocaleTimeString([], {
         hour: "2-digit",
         minute: "2-digit",
-        hour12: true,
+        hour12: false,
       });
     }
   }

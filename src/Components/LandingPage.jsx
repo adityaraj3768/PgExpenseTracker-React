@@ -24,15 +24,16 @@ export function LandingPage({
   const [showJoinGroupModal,setShowJoinGroupModal]=useState(false)
   const [showGroupSelectionModal,setShowGroupSelectionModal]=useState(false)
   const [userGroups, setUserGroups] = useState([])
-  
-  
+  const [cachedGroups, setCachedGroups] = useState(null);
+  const [isPreloadingGroups, setIsPreloadingGroups] = useState(false);
   
   const [hoveredCard, setHoveredCard] = useState(null);
   const [token, setToken] = useState(false);
   const [isEntering, setIsEntering] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const navigate = useNavigate();
 
-  const { setCurrentGroup, fetchAllGroups, setCoins, setMonthlyLimit, setRemainingCoins } = useGroup();
+  const { setCurrentGroup, fetchAllGroups, fetchGroup, setCoins, setMonthlyLimit, setRemainingCoins } = useGroup();
   const { currentUserId } = useUser();
    
 
@@ -42,11 +43,16 @@ export function LandingPage({
     if (storedToken) {
       setToken(true);
       
+      // Preload group metadata in background (no await, fire-and-forget)
+      preloadGroupMetadata(storedToken);
+      
       // Check notification setup for already logged in users
       // If user is logged in, check notification setup
-      if (currentUserId) {
-        checkNotificationSetup(currentUserId);
-      }
+      // NOTE: We intentionally do NOT auto-run notification setup here on page load
+      // because it can trigger network requests (and permission prompts) when the
+      // user simply opens the app. Notification/device registration will be
+      // performed later when the user visits the dashboard or explicitly enables
+      // notifications.
     }
   }, [currentUserId]);
 
@@ -59,7 +65,8 @@ export function LandingPage({
   };
 
   
- const handleLogout = async () => {
+  const handleLogout = async () => {
+  setIsLoggingOut(true);
   let deviceToken = null;
 
   try {
@@ -88,10 +95,30 @@ export function LandingPage({
   } catch (error) {
     // console.log("Logout API error:", error.response?.data || error);
     alert("Logout failed. Try again.");
+    setIsLoggingOut(false);
   }
 };
 
-
+  // Background preload of group metadata (fire-and-forget)
+  const preloadGroupMetadata = async (token) => {
+    try {
+      setIsPreloadingGroups(true);
+      const response = await axios.get(getApiUrl('/pg/group-metadata'), {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
+      
+      if (Array.isArray(response.data)) {
+        setCachedGroups(response.data);
+      }
+    } catch (error) {
+      // Silently fail - cache will remain null and user can still click "Enter Group" to fetch
+      console.warn('Failed to preload group metadata:', error);
+    } finally {
+      setIsPreloadingGroups(false);
+    }
+  };
   //this will show the create group modal
   const onCreateGroup=()=>{
       setShowCreateGroupModal(true)
@@ -106,8 +133,8 @@ export function LandingPage({
 
   //this will help to fetch user's groups and show selection modal
   const handleEnterGroup = async () => {
-    // Prevent multiple clicks while a request is in progress
-    if (isEntering) return;
+    // Prevent multiple clicks while a request is in progress OR while preloading
+    if (isEntering || isPreloadingGroups) return;
 
     try {
       setIsEntering(true);
@@ -118,74 +145,98 @@ export function LandingPage({
         return;
       }
 
+      let groups = cachedGroups;
 
+      // If cache is available, use it immediately (fast path)
+      if (cachedGroups) {
+        if (cachedGroups.length === 0) {
+          setIsEntering(false);
+          alert('You are not part of any group yet. Please create or join a group first.');
+          return;
+        }
+        
+        if (cachedGroups.length === 1) {
+          await selectGroup(cachedGroups[0]);
+          setIsEntering(false);
+          return;
+        }
+        
+        setUserGroups(cachedGroups);
+        setShowGroupSelectionModal(true);
+        setIsEntering(false);
+        return;
+      }
 
-      // Get current month (0-based, so add 1) and year
-      const now = new Date();
-      const month = now.getMonth() + 1;
-      const year = now.getFullYear();
+      // If cache is still being preloaded, wait for it
+      if (isPreloadingGroups) {
+        setIsEntering(false);
+        return;
+      }
 
-
-      // Fetch only the current month's group data
-      const response = await axios.get(getApiUrl(`/pg/my-groups?month=${month}&year=${year}`), {
+      // If cache is empty and not preloading (not preloaded yet), fetch from backend
+      const response = await axios.get(getApiUrl('/pg/group-metadata'), {
         headers: {
           Authorization: `Bearer ${token}`,
         },
       });
-      // Log the groups received from the backend
-      // console.log('Groups received from backend:', response.data.groups);
-      // console.log('Monthly Limit Coins:', response.data.monthlyLimitCoins);
-      // console.log('Remaining Coins:', response.data.remainingCoins);
-      //this is the  all groups of the user that he belongs to
-      const groups = response.data.groups;
 
-  //this is the user's monthly limit coins
-  const coins  = response.data.monthlyLimitCoins;
-
-  setCoins(coins);
-  // Update context monthly limit and remaining coins so dashboard shows immediately
-  if (typeof setMonthlyLimit === 'function') {
-    setMonthlyLimit(response.data.monthlyLimitCoins || 0);
-  }
-  if (typeof setRemainingCoins === 'function') {
-    setRemainingCoins(response.data.remainingCoins || 0);
-  }
-
-
+      groups = response.data;
 
       if (Array.isArray(groups) && groups.length > 0) {
+        // Cache the result for future use
+        setCachedGroups(groups);
+        
         if (groups.length === 1) {
-          // If user has only one group, enter directly
-          selectGroup(groups[0]);
+          // If user has only one group, fetch full data and enter
+          await selectGroup(groups[0]);
           setIsEntering(false);
         } else {
-          // If user has multiple groups, show selection modal
+          // If multiple, show selection modal with metadata
           setUserGroups(groups);
           setShowGroupSelectionModal(true);
           setIsEntering(false);
         }
-      } else if (groups && groups.id) {
-        // Handle case where API returns single group object instead of array
-        selectGroup(groups);
-        setIsEntering(false);
       } else {
         setIsEntering(false);
         alert('You are not part of any group yet. Please create or join a group first.');
       }
     } catch (error) {
-      // Show alert if fetching user groups fails
       setIsEntering(false);
       alert('Failed to fetch your groups. Please try again.');
     }
   };
 
   // Function to handle group selection
-  const selectGroup = (group) => {
-    // Use context setter that persists group to localStorage but skip immediate backend fetch
-    // because we already have the group's data from the landing page
-    setCurrentGroup(group, { skipFetch: true });
+  const selectGroup = async (group) => {
+    // Close the modal immediately and optimistically navigate to dashboard
     setShowGroupSelectionModal(false);
-    navigate(`/dashboard/`);
+
+    // Persist metadata immediately and navigate so user sees dashboard right away.
+    // The full group will be fetched in background and replace the metadata once loaded.
+    try {
+      const groupId = group.groupId || group.id || group.group_id || group.code || group.groupCode;
+      if (!groupId) {
+        alert('Invalid group selected.');
+        return;
+      }
+
+      // Persist lightweight metadata (skipFetch true prevents another immediate fetch)
+      setCurrentGroup(group, { skipFetch: true });
+      navigate(`/dashboard/`);
+
+      // Now trigger background fetch of the full group (fire-and-forget)
+      // fetchAllGroups is not appropriate here; use fetchGroup from context.
+      // We import/use fetchGroup by reading useGroup above.
+      try {
+        // call fetchGroup in background (no await to keep UI responsive)
+        fetchGroup(group);
+      } catch (bgErr) {
+        // background fetch failed silently; dashboard will show skeleton until it resolves
+        console.warn('Background group fetch failed', bgErr);
+      }
+    } catch (error) {
+      alert('Failed to enter the selected group. Please try again.');
+    }
   };
 
 
@@ -204,10 +255,27 @@ export function LandingPage({
             
             <button
               onClick={handleLogout}
-              className="flex items-center px-4 py-2 text-gray-600 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors bg-white/70 backdrop-blur-sm border border-white/20"
+              disabled={isLoggingOut}
+              className={`flex items-center px-4 py-2 rounded-lg transition-colors border border-white/20 backdrop-blur-sm ${
+                isLoggingOut 
+                  ? 'text-gray-400 bg-gray-100 cursor-not-allowed opacity-60' 
+                  : 'text-gray-600 hover:text-red-600 hover:bg-red-50 bg-white/70'
+              }`}
             >
-              <LogOut className="h-4 w-4 mr-2" />
-              Logout
+              {isLoggingOut ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-gray-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
+                  </svg>
+                  Logging out...
+                </>
+              ) : (
+                <>
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Logout
+                </>
+              )}
             </button>
           </div>
         ) : (
@@ -276,8 +344,8 @@ export function LandingPage({
                   onClick={handleEnterGroup}
                   hovered={hoveredCard === 'enter'}
                   setHovered={() => setHoveredCard('enter')}
-                  disabled={isEntering}
-                  loading={isEntering}
+                  disabled={isEntering || isPreloadingGroups}
+                  loading={isEntering || isPreloadingGroups}
                 />
               </div>
             )}

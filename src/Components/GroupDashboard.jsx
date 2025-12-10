@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { createPortal } from "react-dom";
-import { motion, AnimatePresence} from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import axios from "axios";
 import { toast } from "react-hot-toast";
 import {
@@ -19,29 +19,56 @@ import {
   Home,
   User,
   ArrowLeftRight,
+  HandCoins,
 } from "lucide-react";
-import { useNavigate } from 'react-router-dom';
-import { useSpring, animated } from 'react-spring';
+import { useNavigate } from "react-router-dom";
+import { useSpring, animated } from "react-spring";
 
 // Context and utilities
 import { useGroup } from "../Context/GroupContext";
 import { useUser } from "../Context/CurrentUserIdContext";
-import { calculateBalances, getTotalExpenses } from "../Utils/Calculation";
+import {
+  calculateBalances,
+  getTotalExpenses,
+  safeToFixed,
+} from "../Utils/Calculation";
 import { getApiUrl } from "../Utils/api";
 
 // Per-group-type visual styles used for header icon
 const GROUP_TYPE_STYLES = {
-  FRIENDS: { bg: 'bg-gradient-to-r from-blue-500 to-indigo-600', text: 'text-white', border: 'border-blue-300' },
-  FAMILY: { bg: 'bg-gradient-to-r from-green-500 to-green-600', text: 'text-white', border: 'border-green-300' },
-  TRIP: { bg: 'bg-gradient-to-r from-purple-500 to-purple-600', text: 'text-white', border: 'border-purple-300' },
-  PERSONAL: { bg: 'bg-gradient-to-r from-yellow-400 to-yellow-500', text: 'text-white', border: 'border-yellow-300' },
-  OTHERS: { bg: 'bg-gray-200', text: 'text-gray-700', border: 'border-gray-300' },
+  FRIENDS: {
+    bg: "bg-gradient-to-r from-blue-500 to-indigo-600",
+    text: "text-white",
+    border: "border-blue-300",
+  },
+  FAMILY: {
+    bg: "bg-gradient-to-r from-green-500 to-green-600",
+    text: "text-white",
+    border: "border-green-300",
+  },
+  TRIP: {
+    bg: "bg-gradient-to-r from-purple-500 to-purple-600",
+    text: "text-white",
+    border: "border-purple-300",
+  },
+  PERSONAL: {
+    bg: "bg-gradient-to-r from-yellow-400 to-yellow-500",
+    text: "text-white",
+    border: "border-yellow-300",
+  },
+  OTHERS: {
+    bg: "bg-gray-200",
+    text: "text-gray-700",
+    border: "border-gray-300",
+  },
 };
 
 // Components
 
 import { ExpenseList } from "./ExpenseList";
 import { MemberList } from "./MemberList";
+import { CalendarView } from "./CalendarView";
+import { TripTimeline } from "./TripTimeline";
 // Modal for showing member's expenses
 function MemberExpensesModal({ isOpen, onClose, member, expenses }) {
   if (!isOpen || !member) return null;
@@ -69,7 +96,10 @@ function MemberExpensesModal({ isOpen, onClose, member, expenses }) {
               <Users className="w-5 h-5 text-indigo-400" />
               {member.name || member.username || member.userId}’s Expenses
             </h3>
-            <button onClick={onClose} className="p-2 text-gray-400 hover:text-gray-200 transition">
+            <button
+              onClick={onClose}
+              className="p-2 text-gray-400 hover:text-gray-200 transition"
+            >
               <X className="w-5 h-5" />
             </button>
           </div>
@@ -88,12 +118,18 @@ function MemberExpensesModal({ isOpen, onClose, member, expenses }) {
                   whileHover={{ scale: 1.02 }}
                 >
                   <div className="flex justify-between w-full items-center">
-                    <span className="font-medium text-gray-100">{expense.description}</span>
-                    <span className="font-semibold text-green-400">₹{expense.amount}</span>
+                    <span className="font-medium text-gray-100">
+                      {expense.description}
+                    </span>
+                    <span className="font-semibold text-green-400">
+                      ₹{expense.amount}
+                    </span>
                   </div>
 
                   <div className="flex justify-between w-full mt-1 text-xs text-gray-500">
-                    <span>{new Date(expense.paymentDate).toLocaleDateString()}</span>
+                    <span>
+                      {new Date(expense.paymentDate).toLocaleDateString()}
+                    </span>
                   </div>
 
                   {expense.tags && expense.tags.length > 0 && (
@@ -119,14 +155,20 @@ function MemberExpensesModal({ isOpen, onClose, member, expenses }) {
   );
 }
 
-
 import { AddExpenseModal } from "./AddExpenseModal";
 import Confetti from "react-confetti";
 import { Coins } from "./Coins";
 import CoinsHistory from "./CoinsHistory";
 
 // Small popup/modal for adding coins and setting monthly limit
-function CoinsPopup({ isOpen, onClose, onSave, onAddCoins, loading, monthlyLimitSet }) {
+function CoinsPopup({
+  isOpen,
+  onClose,
+  onSave,
+  onAddCoins,
+  loading,
+  monthlyLimitSet,
+}) {
   const [value, setValue] = useState("");
   const [mode, setMode] = useState("setLimit"); // 'setLimit' or 'addCoins'
   const [loadingButton, setLoadingButton] = useState(null); // 'setLimit' or 'addCoins' or null
@@ -152,10 +194,9 @@ function CoinsPopup({ isOpen, onClose, onSave, onAddCoins, loading, monthlyLimit
           className="absolute top-2 right-12 text-gray-300 hover:text-white text-xs px-3 py-1 
 rounded-full bg-[#1E1E1E] hover:bg-[#2A2A2A] border border-gray-700 
 transition-all duration-200 shadow-sm hover:shadow-md"
-
           onClick={() => {
             // trigger a custom event so parent can open history modal
-            const ev = new CustomEvent('openCoinsHistory');
+            const ev = new CustomEvent("openCoinsHistory");
             window.dispatchEvent(ev);
           }}
           title="View coin history"
@@ -170,7 +211,8 @@ transition-all duration-200 shadow-sm hover:shadow-md"
         </label>
         {mode === "setLimit" && (
           <div className="text-xs text-yellow-700 mb-2 bg-yellow-50 border border-yellow-200 rounded px-2 py-1">
-            Setting the limit will reset <b>remaining coins</b> and <b>limit</b> to the new value.
+            Setting the limit will reset <b>remaining coins</b> and <b>limit</b>{" "}
+            to the new value.
           </div>
         )}
         <input
@@ -225,9 +267,19 @@ export function GroupDashboard() {
   const [showQuickAddPopup, setShowQuickAddPopup] = useState(false);
   // State for member expenses modal
   const [selectedMember, setSelectedMember] = useState(null);
+  // State for calendar modal
+  const [showCalendar, setShowCalendar] = useState(false);
+  const [calendarBaseDate, setCalendarBaseDate] = useState(new Date());
   const navigate = useNavigate();
   const [selectedMemberExpenses, setSelectedMemberExpenses] = useState([]);
-  const { monthlyLimit, setMonthlyLimit, remainingCoins, setRemainingCoins, setCurrentGroup, setTotalExpenses } = useGroup();
+  const {
+    monthlyLimit,
+    setMonthlyLimit,
+    remainingCoins,
+    setRemainingCoins,
+    setCurrentGroup,
+    setTotalExpenses,
+  } = useGroup();
   const [showCoinsPopup, setShowCoinsPopup] = useState(false);
   const [savingCoins, setSavingCoins] = useState(false);
   const [showCoinsHistory, setShowCoinsHistory] = useState(false);
@@ -245,24 +297,33 @@ export function GroupDashboard() {
   // control for modern dropdown in modal
   const [showTypePicker, setShowTypePicker] = useState(false);
 
+  // Track which month the calendar should open on
+  const handleShowCalendar = useCallback((baseDate) => {
+    setCalendarBaseDate(baseDate || new Date());
+    setShowCalendar(true);
+  }, []);
+
+  const handleCloseCalendar = useCallback(() => {
+    setShowCalendar(false);
+  }, []);
+
   // Type options and helpers for icon and label
   const TYPE_OPTIONS = [
-    { key: 'PERSONAL', label: 'Personal' },
-    { key: 'FRIENDS', label: 'Friends' },
-    { key: 'TRIP', label: 'Trip' },
-    { key: 'FAMILY', label: 'Family' },
-    { key: 'OTHERS', label: 'Others' },
+    { key: "PERSONAL", label: "Personal" },
+    { key: "FRIENDS", label: "Friends" },
+    { key: "TRIP", label: "Trip" },
+    { key: "FAMILY", label: "Family" },
+    { key: "OTHERS", label: "Others" },
   ];
 
   const getIconForType = (type) => {
-    const t = String(type || '').toUpperCase();
-    if (t === 'FRIENDS') return Users;
-    if (t === 'TRIP') return Plane;
-    if (t === 'PERSONAL') return User;
-    if (t === 'FAMILY') return Home;
+    const t = String(type || "").toUpperCase();
+    if (t === "FRIENDS") return Users;
+    if (t === "TRIP") return Plane;
+    if (t === "PERSONAL") return User;
+    if (t === "FAMILY") return Home;
     return Globe;
   };
-  
 
   // Delete confirmation modal state
   const [expenseToDelete, setExpenseToDelete] = useState(null);
@@ -289,12 +350,22 @@ export function GroupDashboard() {
   const [selectedYear, setSelectedYear] = useState(previousYear);
 
   // === CONTEXT HOOKS ===
-  const { currentGroup, fetchGroup, fetchInitialGroup, currentBalance } =
-    useGroup();
+  const {
+    currentGroup,
+    fetchGroup,
+    fetchInitialGroup,
+    currentBalance,
+    groupLoading,
+  } = useGroup();
   const { currentUserId } = useUser();
 
   // Modal-level fallback for current type to avoid recomputing and ensure a non-null value
-  const modalCurrentType = (currentGroup?.groupType || currentGroup?.type || currentGroup?.group_type || 'OTHERS')
+  const modalCurrentType = (
+    currentGroup?.groupType ||
+    currentGroup?.type ||
+    currentGroup?.group_type ||
+    "OTHERS"
+  )
     .toString()
     .toUpperCase();
 
@@ -302,9 +373,9 @@ export function GroupDashboard() {
   // We watch the length so we only clear when an expense is added/removed.
   useEffect(() => {
     const openListener = () => setShowCoinsHistory(true);
-    window.addEventListener('openCoinsHistory', openListener);
+    window.addEventListener("openCoinsHistory", openListener);
     return () => {
-      window.removeEventListener('openCoinsHistory', openListener);
+      window.removeEventListener("openCoinsHistory", openListener);
     };
   }, []);
 
@@ -318,7 +389,7 @@ export function GroupDashboard() {
 
   // If the group becomes single-member, ensure members tab isn't active
   useEffect(() => {
-    const memberCount = (currentGroup?.users?.length || 0);
+    const memberCount = currentGroup?.users?.length || 0;
     if (memberCount <= 1 && activeTab === "members") {
       setActiveTab("expenses");
     }
@@ -343,8 +414,8 @@ export function GroupDashboard() {
         setCopySuccess(false);
       }, 2000);
     } catch (error) {
-  toast.error("Failed to copy group code");
-  // Error copying group code to clipboard
+      toast.error("Failed to copy group code");
+      // Error copying group code to clipboard
     }
   };
 
@@ -372,8 +443,8 @@ export function GroupDashboard() {
           expenses: updatedExpenses,
         };
 
-        // Update context (this version also persists currentGroupCode via context setter)
-        setCurrentGroup(updatedGroup);
+        // Update context and prevent backend refetch
+        setCurrentGroup(updatedGroup, { skipFetch: true });
 
         // Persist the updated group snapshot in localStorage so local consumers can read up-to-date data
         try {
@@ -401,13 +472,19 @@ export function GroupDashboard() {
               }
 
               // If the deleted expense belonged to the currently selected month/year, update the displayed list
-              if (selectedMonth + 1 === d.getMonth() + 1 && selectedYear === d.getFullYear()) {
+              if (
+                selectedMonth + 1 === d.getMonth() + 1 &&
+                selectedYear === d.getFullYear()
+              ) {
                 setPreviousMonthExpenses(updated);
               }
 
               // Persist cache to localStorage (best-effort)
               try {
-                localStorage.setItem("previousMonthsCache", JSON.stringify(next));
+                localStorage.setItem(
+                  "previousMonthsCache",
+                  JSON.stringify(next)
+                );
               } catch (e) {
                 // ignore
               }
@@ -436,22 +513,49 @@ export function GroupDashboard() {
         if (!payload) continue;
 
         if (setTotalExpenses && payload.totalExpenses !== undefined) {
-          console.log("Updating totalExpenses from backend:", payload.totalExpenses);
+          console.log(
+            "Updating totalExpenses from backend:",
+            payload.totalExpenses
+          );
           setTotalExpenses(payload.totalExpenses);
         }
 
         if (setRemainingCoins && payload.remainingCoins !== undefined) {
-          console.log("Updating remainingCoins from backend:", payload.remainingCoins);
+          console.log(
+            "Updating remainingCoins from backend:",
+            payload.remainingCoins
+          );
           setRemainingCoins(payload.remainingCoins);
         }
 
         if (setMonthlyLimit && payload.monthlyLimitCoins !== undefined) {
-          console.log("Updating monthlyLimit from backend:", payload.monthlyLimitCoins);
+          console.log(
+            "Updating monthlyLimit from backend:",
+            payload.monthlyLimitCoins
+          );
           setMonthlyLimit(payload.monthlyLimitCoins);
         }
       }
+
+      // Always update remainingCoins from backendData if present (root or user object)
+      if (setRemainingCoins) {
+        if (backendData && typeof backendData.remainingCoins !== 'undefined') {
+          setRemainingCoins(backendData.remainingCoins);
+        } else if (backendData && backendData.user && typeof backendData.user.remainingCoins !== 'undefined') {
+          setRemainingCoins(backendData.user.remainingCoins);
+        }
+      }
     },
-    [setCurrentGroup, currentGroup, setTotalExpenses, setRemainingCoins, setMonthlyLimit, setPreviousMonthsCache, selectedMonth, selectedYear]
+    [
+      setCurrentGroup,
+      currentGroup,
+      setTotalExpenses,
+      setRemainingCoins,
+      setMonthlyLimit,
+      setPreviousMonthsCache,
+      selectedMonth,
+      selectedYear,
+    ]
   );
 
   /**
@@ -471,7 +575,11 @@ export function GroupDashboard() {
     setIsDeleting(true);
 
     try {
-      const groupId = currentGroup?.id ?? currentGroup?.groupId ?? currentGroup?.groupCode ?? currentGroup?.code;
+      const groupId =
+        currentGroup?.id ??
+        currentGroup?.groupId ??
+        currentGroup?.groupCode ??
+        currentGroup?.code;
       const url = groupId
         ? getApiUrl(`/pg/delete/expense/${expenseId}/group/${groupId}`)
         : getApiUrl(`/pg/delete/expense/${expenseId}`);
@@ -480,6 +588,7 @@ export function GroupDashboard() {
       });
       const data = response.data;
       // Debug: log backend response so we can inspect shape (remainingCoins may be nested)
+      setRemainingCoins(data);
       console.log("After deletion the remaining coins:", data);
 
       toast.success("Expense deleted successfully!", {
@@ -489,6 +598,19 @@ export function GroupDashboard() {
 
       setExpenseToDelete(null);
       handleExpenseDeleted(expenseId, data);
+
+      // Update remaining coins directly from backend response (root or nested)
+      const remainingFromResponse =
+        (data && data.remainingCoins !== undefined
+          ? data.remainingCoins
+          : undefined) ??
+        (data && data.user && data.user.remainingCoins !== undefined
+          ? data.user.remainingCoins
+          : undefined);
+
+      if (setRemainingCoins && remainingFromResponse !== undefined) {
+        setRemainingCoins(remainingFromResponse);
+      }
     } catch (error) {
       const errorMessage =
         error.response?.data?.message || "Something went wrong";
@@ -515,6 +637,11 @@ export function GroupDashboard() {
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
+    // For TRIP groups, expenses are not month-based — show all expenses
+    if (modalCurrentType === "TRIP") {
+      return currentGroup?.expenses || [];
+    }
+
     return (currentGroup?.expenses || []).filter((expense) => {
       const expenseDate = new Date(expense.paymentDate);
       return (
@@ -539,15 +666,18 @@ export function GroupDashboard() {
   // === ANIMATED TOTAL EXPENSE ===
   const animatedTotal = useSpring({
     from: { number: 0 },
-    to: { number: (
-      activeTab === "previous"
-        ? totalPreviousMonthExpense
-        : activeTab === "expenses"
-        ? totalCurrentMonthExpense
-        : activeTab === "members"
-        ? totalCurrentMonthExpense
-        : totalExpense
-    ) },
+    to: {
+      number:
+        activeTab === "previous"
+          ? totalPreviousMonthExpense
+          : activeTab === "expenses"
+          ? modalCurrentType === "TRIP"
+            ? totalExpense
+            : totalCurrentMonthExpense
+          : activeTab === "members"
+          ? totalCurrentMonthExpense
+          : totalExpense,
+    },
     config: { duration: 900 }, // Faster animation
     reset: true,
   });
@@ -625,6 +755,32 @@ export function GroupDashboard() {
       return "You";
     }
   }, [currentGroup?.users, currentUserId]);
+
+  // For TRIP groups we may want to show all expenses and disable Previous Months tab
+  useEffect(() => {
+    if (modalCurrentType === "TRIP" && activeTab === "previous") {
+      setActiveTab("expenses");
+    }
+  }, [modalCurrentType, activeTab]);
+
+  // Total spent by current user across all time (used for TRIP groups)
+  const currentUserAllExpense = useMemo(() => {
+    if (!currentGroup?.expenses || !currentUserId) return 0;
+    const userExpenses = getUserExpenses(
+      currentGroup.expenses,
+      currentUserId,
+      currentGroup.users || []
+    );
+    return userExpenses.reduce(
+      (sum, expense) => sum + parseFloat(expense.amount || 0),
+      0
+    );
+  }, [
+    currentGroup?.expenses,
+    currentUserId,
+    currentGroup?.users,
+    getUserExpenses,
+  ]);
 
   /**
    * Calculate each user's current month expenses for MemberList component
@@ -745,7 +901,11 @@ export function GroupDashboard() {
 
   // Calculate current user's expenses for the selected previous month (from backend)
   const previousMonthCurrentUserExpense = useMemo(() => {
-    if (!currentGroup?.users || !currentUserId || previousMonthExpenses.length === 0) {
+    if (
+      !currentGroup?.users ||
+      !currentUserId ||
+      previousMonthExpenses.length === 0
+    ) {
       return 0;
     }
     // Find the current user object
@@ -766,7 +926,10 @@ export function GroupDashboard() {
         (currentUser && expense.paidBy === currentUser?.name) ||
         (currentUser && expense.paidBy === currentUser?.username)
     );
-    return userExpenses.reduce((sum, expense) => sum + parseFloat(expense.amount), 0);
+    return userExpenses.reduce(
+      (sum, expense) => sum + parseFloat(expense.amount),
+      0
+    );
   }, [previousMonthExpenses, currentUserId, currentGroup?.users]);
 
   // === EFFECTS ===
@@ -798,6 +961,9 @@ export function GroupDashboard() {
 
   // Fetch previous month expenses from backend when tab or month/year changes
   useEffect(() => {
+    // Do not fetch previous-months data for TRIP groups (they are not month-based)
+    if (modalCurrentType === "TRIP") return;
+
     if (activeTab === "previous") {
       const cacheKey = `${selectedMonth + 1}-${selectedYear}`;
       if (previousMonthsCache[cacheKey]) {
@@ -808,18 +974,31 @@ export function GroupDashboard() {
         setLoadingPrevious(true);
         try {
           const token = localStorage.getItem("token");
-          const response = await axios.get(getApiUrl(`/pg/my-groups?month=${selectedMonth + 1}&year=${selectedYear}`), {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          // Assume response.data.groups is an array, find current group
-          const groups = response.data.groups;
-          const groupIdentifier = currentGroup?.groupCode || currentGroup?.code || currentGroup?.id;
-          const updatedGroup = Array.isArray(groups)
-            ? groups.find(g => g.groupCode === groupIdentifier || g.code === groupIdentifier || g.id === groupIdentifier)
-            : groups;
+          // Prefer numeric id for backend call; fall back to any id-like field
+          const groupIdentifier =
+            currentGroup?.groupId ??
+            currentGroup?.id ??
+            currentGroup?.groupCode ??
+            currentGroup?.code;
+          if (!groupIdentifier) {
+            setPreviousMonthExpenses([]);
+            setLoadingPrevious(false);
+            return;
+          }
+
+          const response = await axios.get(
+            getApiUrl(
+              `/pg/my-group?groupId=${groupIdentifier}&month=${
+                selectedMonth + 1
+              }&year=${selectedYear}`
+            ),
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+
+          const updatedGroup = response.data.group || response.data;
           const expenses = updatedGroup?.expenses || [];
           setPreviousMonthExpenses(expenses);
-          setPreviousMonthsCache(prev => ({ ...prev, [cacheKey]: expenses }));
+          setPreviousMonthsCache((prev) => ({ ...prev, [cacheKey]: expenses }));
         } catch (err) {
           setPreviousMonthExpenses([]);
         } finally {
@@ -828,7 +1007,13 @@ export function GroupDashboard() {
       };
       fetchPreviousExpenses();
     }
-  }, [activeTab, selectedMonth, selectedYear, currentGroup, previousMonthsCache]);
+  }, [
+    activeTab,
+    selectedMonth,
+    selectedYear,
+    currentGroup,
+    previousMonthsCache,
+  ]);
 
   // === LOADING AND ERROR STATES ===
 
@@ -841,6 +1026,107 @@ export function GroupDashboard() {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600">Loading group...</p>
         </div>
+      </div>
+    );
+  }
+
+  // When we have a currentGroup snapshot but are fetching full details in background,
+  // show an inline skeleton/shimmer so the user perceives progress without a blocking spinner.
+  if (currentGroup && groupLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-indigo-50 text-gray-900 relative">
+        <header className="bg-white/80 backdrop-blur-sm border-b border-white/20 sticky top-0 z-40">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="flex items-center justify-between py-4">
+              <div className="flex items-center gap-4">
+                <div className="rounded-full h-12 w-12 shimmer-dark flex-shrink-0" />
+                <div className="flex flex-col">
+                  <div className="h-5 w-56 rounded-lg shimmer-dark mb-2" />
+                  <div className="h-3 w-40 rounded-lg shimmer-dark" />
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+              
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
+          {/* Coins / CTA placeholder */}
+          <div className="mb-6">
+            <div className="bg-white/60 backdrop-blur-sm rounded-xl p-4 shadow-sm border border-gray-200">
+              {/* Top bar skeleton */}
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  {/* Small rounded icon */}
+                  <div className="h-10 w-10 bg-gray-200 rounded-full animate-pulse" />
+
+                  {/* Two small lines */}
+                  <div className="flex flex-col gap-2">
+                    <div className="h-3 w-40 bg-gray-200 rounded animate-pulse" />
+                    <div className="h-3 w-24 bg-gray-200 rounded animate-pulse" />
+                  </div>
+                </div>
+
+                {/* Right side small loader */}
+                <div className="h-4 w-16 bg-gray-200 rounded animate-pulse" />
+              </div>
+            </div>
+          </div>
+
+          {/* Overview cards (Total / Your spent / Give-Take) */}
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 mb-6">
+            {/* Big Card */}
+            <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-4 sm:p-6 shadow-lg border border-white/20">
+              <div className="premium-shimmer h-20 w-full"></div>
+            </div>
+
+            {/* Right 2 Small Cards */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-4 sm:p-6 shadow-lg border border-white/20">
+                <div className="premium-shimmer h-14 w-full"></div>
+              </div>
+
+              <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-4 sm:p-6 shadow-lg border border-white/20">
+                <div className="premium-shimmer h-14 w-full"></div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tabs and two-column content area to mimic dashboard layout */}
+          <div className="bg-white/70 backdrop-blur-sm rounded-2xl shadow-lg border border-white/20 p-4 sm:p-6">
+
+  {/* Top filters shimmer */}
+  <div className="flex gap-3 mb-6">
+    <div className="premium-shimmer h-9 w-44 rounded-full"></div>
+    <div className="premium-shimmer h-9 w-36 rounded-full"></div>
+    <div className="premium-shimmer h-9 w-40 rounded-full"></div>
+  </div>
+
+  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+    {/* Main Expense List */}
+    <div className="lg:col-span-2 space-y-4">
+      {Array.from({ length: 7 }).map((_, i) => (
+        <div
+          key={i}
+          className="bg-gray-50/70 backdrop-blur-sm border border-gray-200 rounded-xl p-4 shadow-sm"
+        >
+          <div className="premium-shimmer h-12 w-full rounded-lg"></div>
+        </div>
+      ))}
+    </div>
+
+   
+
+  </div>
+</div>
+
+        </main>
+        {/* Full-screen shimmer overlays so pulse sweeps continuously across entire viewport */}
+        <div className="shimmer-screen-dark" aria-hidden="true" />
+        <div className="shimmer-screen-dark alt" aria-hidden="true" />
       </div>
     );
   }
@@ -880,23 +1166,39 @@ export function GroupDashboard() {
               <div className="relative mr-3">
                 {(() => {
                   // Choose icon + styles based on group type
-                  const typeKey = (currentGroup?.groupType || currentGroup?.type || currentGroup?.group_type || '').toString().toUpperCase() || 'OTHERS';
+                  const typeKey =
+                    (
+                      currentGroup?.groupType ||
+                      currentGroup?.type ||
+                      currentGroup?.group_type ||
+                      ""
+                    )
+                      .toString()
+                      .toUpperCase() || "OTHERS";
                   const Icon =
-                    typeKey === 'FRIENDS' ? Users :
-                    typeKey === 'TRIP' ? Plane :
-                    typeKey === 'PERSONAL' ? User :
-                    typeKey === 'FAMILY' ? Home :
-                    Globe;
-                  const style = GROUP_TYPE_STYLES[typeKey] || GROUP_TYPE_STYLES.OTHERS;
+                    typeKey === "FRIENDS"
+                      ? Users
+                      : typeKey === "TRIP"
+                      ? Plane
+                      : typeKey === "PERSONAL"
+                      ? User
+                      : typeKey === "FAMILY"
+                      ? Home
+                      : Globe;
+                  const style =
+                    GROUP_TYPE_STYLES[typeKey] || GROUP_TYPE_STYLES.OTHERS;
 
                   return (
-                    <div className={`p-2 ${style.bg} rounded-lg border ${style.border}`}>
+                    <div
+                      className={`p-2 ${style.bg} rounded-lg border ${style.border}`}
+                    >
                       {/* Only allow opening members popup when there are multiple users */}
-                      { (currentGroup?.users?.length || 0) > 1 ? (
+                      {(currentGroup?.users?.length || 0) > 1 ? (
                         <button
                           onClick={() => setShowMembersPopup(true)}
                           onKeyDown={(e) => {
-                            if (e.key === 'Enter' || e.key === ' ') setShowMembersPopup(true);
+                            if (e.key === "Enter" || e.key === " ")
+                              setShowMembersPopup(true);
                           }}
                           aria-label="Show members"
                           title="Show members"
@@ -912,14 +1214,14 @@ export function GroupDashboard() {
                   );
                 })()}
                 {/* Member count badge (only when more than 1 member) */}
-                { (currentGroup?.users?.length || 0) > 1 && (
+                {(currentGroup?.users?.length || 0) > 1 && (
                   <span
                     className="absolute -top-1 -right-1 inline-flex items-center justify-center px-1.5 py-0.5 text-xs font-semibold leading-none text-white bg-red-500 rounded-full shadow"
                     aria-label={`Members: ${currentGroup?.users?.length || 0}`}
                   >
                     {currentGroup?.users?.length || 0}
                   </span>
-                ) }
+                )}
               </div>
               <div>
                 <h1 className="text-lg sm:text-xl font-bold text-gray-900 truncate max-w-48 sm:max-w-none flex items-center gap-1">
@@ -931,7 +1233,12 @@ export function GroupDashboard() {
                       setShowEditGroupName(true);
                       setNewGroupName(currentGroup.groupName || "");
                       setSelectedGroupType(
-                        (currentGroup?.groupType || currentGroup?.type || currentGroup?.group_type || 'OTHERS')
+                        (
+                          currentGroup?.groupType ||
+                          currentGroup?.type ||
+                          currentGroup?.group_type ||
+                          "OTHERS"
+                        )
                           .toString()
                           .toUpperCase()
                       );
@@ -980,10 +1287,12 @@ export function GroupDashboard() {
             exit={{ opacity: 0, scale: 0.9, y: 20 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
             className="bg-white shadow-2xl rounded-xl p-6 w-[90%] max-w-md mx-4 border border-gray-200 relative"
-            onClick={e => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-lg font-semibold text-gray-900">Edit Group Name</h3>
+              <h3 className="text-lg font-semibold text-gray-900">
+                Edit Group Name
+              </h3>
               <button
                 onClick={() => setShowEditGroupName(false)}
                 disabled={editingGroupName}
@@ -997,23 +1306,29 @@ export function GroupDashboard() {
               type="text"
               className="w-full border border-gray-300 rounded px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-200"
               value={newGroupName}
-              onChange={e => setNewGroupName(e.target.value)}
+              onChange={(e) => setNewGroupName(e.target.value)}
               disabled={editingGroupName}
               placeholder="Enter new group name"
             />
             {/* Group Type Picker (modern dropdown with icons) */}
             <div className="mb-4">
-              <label className="block text-sm text-gray-700 mb-1">Group Type</label>
+              <label className="block text-sm text-gray-700 mb-1">
+                Group Type
+              </label>
               <div className="relative">
                 {/* Selected */}
                 {(() => {
-                  const active = (selectedGroupType && String(selectedGroupType).toUpperCase()) || modalCurrentType;
+                  const active =
+                    (selectedGroupType &&
+                      String(selectedGroupType).toUpperCase()) ||
+                    modalCurrentType;
                   const Icon = getIconForType(active);
-                  const label = TYPE_OPTIONS.find(o => o.key === active)?.label || active;
+                  const label =
+                    TYPE_OPTIONS.find((o) => o.key === active)?.label || active;
                   return (
                     <button
                       type="button"
-                      onClick={() => setShowTypePicker(s => !s)}
+                      onClick={() => setShowTypePicker((s) => !s)}
                       disabled={editingGroupName}
                       className="w-full flex items-center justify-between gap-2 px-3 py-2 border border-gray-300 rounded bg-white hover:shadow-sm focus:outline-none"
                     >
@@ -1023,8 +1338,21 @@ export function GroupDashboard() {
                         </div>
                         <span className="text-sm text-gray-800">{label}</span>
                       </div>
-                      <svg className={`h-4 w-4 text-gray-500 transform ${showTypePicker ? 'rotate-180' : ''}`} viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M6 8L10 12L14 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                      <svg
+                        className={`h-4 w-4 text-gray-500 transform ${
+                          showTypePicker ? "rotate-180" : ""
+                        }`}
+                        viewBox="0 0 20 20"
+                        fill="none"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          d="M6 8L10 12L14 8"
+                          stroke="currentColor"
+                          strokeWidth="1.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
                       </svg>
                     </button>
                   );
@@ -1033,9 +1361,12 @@ export function GroupDashboard() {
                 {/* Options */}
                 {showTypePicker && (
                   <div className="absolute left-0 right-0 mt-2 bg-white border border-gray-200 rounded shadow-lg z-50 overflow-hidden">
-                    {TYPE_OPTIONS.map(opt => {
+                    {TYPE_OPTIONS.map((opt) => {
                       const Icon = getIconForType(opt.key);
-                      const activeKey = (selectedGroupType && String(selectedGroupType).toUpperCase()) || modalCurrentType;
+                      const activeKey =
+                        (selectedGroupType &&
+                          String(selectedGroupType).toUpperCase()) ||
+                        modalCurrentType;
                       const isSelected = activeKey === opt.key;
                       return (
                         <button
@@ -1045,10 +1376,24 @@ export function GroupDashboard() {
                             setSelectedGroupType(opt.key);
                             setShowTypePicker(false);
                           }}
-                          className={`w-full text-left px-3 py-2 flex items-center gap-3 hover:bg-gray-50 ${isSelected ? 'bg-blue-50' : ''}`}
+                          className={`w-full text-left px-3 py-2 flex items-center gap-3 hover:bg-gray-50 ${
+                            isSelected ? "bg-blue-50" : ""
+                          }`}
                         >
-                          <Icon className={`h-5 w-5 ${isSelected ? 'text-blue-600' : 'text-gray-500'}`} />
-                          <span className={`text-sm ${isSelected ? 'font-semibold text-blue-700' : 'text-gray-800'}`}>{opt.label}</span>
+                          <Icon
+                            className={`h-5 w-5 ${
+                              isSelected ? "text-blue-600" : "text-gray-500"
+                            }`}
+                          />
+                          <span
+                            className={`text-sm ${
+                              isSelected
+                                ? "font-semibold text-blue-700"
+                                : "text-gray-800"
+                            }`}
+                          >
+                            {opt.label}
+                          </span>
                         </button>
                       );
                     })}
@@ -1067,14 +1412,25 @@ export function GroupDashboard() {
               <button
                 onClick={async () => {
                   // Allow save when either name or type changed. If name is empty, use existing group name.
-                  const currentType = (currentGroup?.groupType || currentGroup?.type || currentGroup?.group_type || 'OTHERS').toString().toUpperCase();
-                  const nameToSend = newGroupName.trim() || currentGroup.groupName || "";
+                  const currentType = (
+                    currentGroup?.groupType ||
+                    currentGroup?.type ||
+                    currentGroup?.group_type ||
+                    "OTHERS"
+                  )
+                    .toString()
+                    .toUpperCase();
+                  const nameToSend =
+                    newGroupName.trim() || currentGroup.groupName || "";
                   // If nothing changed (name same and type same), do nothing
                   if (!nameToSend && selectedGroupType === currentType) return;
                   setEditingGroupName(true);
                   try {
                     const token = localStorage.getItem("token");
-                    const finalGroupType = (selectedGroupType && String(selectedGroupType).trim()) ? selectedGroupType : currentType;
+                    const finalGroupType =
+                      selectedGroupType && String(selectedGroupType).trim()
+                        ? selectedGroupType
+                        : currentType;
                     const payload = {
                       newGroupName: nameToSend,
                       groupCode: currentGroup.groupCode,
@@ -1088,11 +1444,18 @@ export function GroupDashboard() {
                     );
                     // Update group in context/state
                     if (response.data) {
-                      currentGroup.groupName = response.data.groupName || nameToSend;
-                      currentGroup.groupType = response.data.groupType || selectedGroupType || currentType;
+                      currentGroup.groupName =
+                        response.data.groupName || nameToSend;
+                      currentGroup.groupType =
+                        response.data.groupType ||
+                        selectedGroupType ||
+                        currentType;
                       try {
                         setCurrentGroup({ ...currentGroup });
-                        localStorage.setItem("currentGroup", JSON.stringify(currentGroup));
+                        localStorage.setItem(
+                          "currentGroup",
+                          JSON.stringify(currentGroup)
+                        );
                       } catch (e) {}
                       toast.success("Group updated!");
                     }
@@ -1128,14 +1491,12 @@ export function GroupDashboard() {
           {/* If monthly limit is not set, show a prompt to the user */}
           {monthlyLimit === 0 ? (
             <div className="bg-gradient-to-r from-pink-300 via-purple-300 to-indigo-300 text-gray-900 rounded-2xl px-6 py-4 mb-4 text-center shadow-md">
-  <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
-    <span className="font-semibold text-lg">
-      🚀 To set your monthly limit click below👇 
-    </span>
-  </div>
-</div>
-
-
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
+                <span className="font-semibold text-lg">
+                  🚀 To set your monthly limit click below👇
+                </span>
+              </div>
+            </div>
           ) : null}
           <div
             className="bg-white/80 backdrop-blur-sm rounded-2xl p-4 sm:p-6 shadow-lg border border-blue-500 cursor-pointer hover:shadow-xl transition-shadow outline-none focus:ring-2 focus:ring-blue-300"
@@ -1148,21 +1509,31 @@ export function GroupDashboard() {
           >
             {/* Show remaining coins: limit - total spent */}
             <Coins count={remainingCoins} />
-            <div className="text-xs text-gray-500 mt-1 mb-2">Remaining coins</div>
+            <div className="text-xs text-gray-500 mt-1 mb-2">
+              Remaining coins
+            </div>
             {/* Progress Bar */}
             <div className="w-full h-3 bg-gray-200 rounded-full overflow-hidden mb-1">
               <div
                 className={
                   `h-full transition-all duration-500 ` +
                   (monthlyLimit === 0
-                    ? 'bg-gray-300'
+                    ? "bg-gray-300"
                     : (monthlyLimit - remainingCoins) / monthlyLimit < 0.5
-                    ? 'bg-gradient-to-r from-green-400 to-green-600'
+                    ? "bg-gradient-to-r from-green-400 to-green-600"
                     : (monthlyLimit - remainingCoins) / monthlyLimit < 0.8
-                    ? 'bg-gradient-to-r from-yellow-400 to-yellow-600'
-                    : 'bg-gradient-to-r from-red-400 to-red-600')
+                    ? "bg-gradient-to-r from-yellow-400 to-yellow-600"
+                    : "bg-gradient-to-r from-red-400 to-red-600")
                 }
-                style={{ width: monthlyLimit > 0 ? `${Math.max(0, Math.min(100, (remainingCoins / monthlyLimit) * 100))}%` : '0%' }}
+                style={{
+                  width:
+                    monthlyLimit > 0
+                      ? `${Math.max(
+                          0,
+                          Math.min(100, (remainingCoins / monthlyLimit) * 100)
+                        )}%`
+                      : "0%",
+                }}
               ></div>
             </div>
             <div className="flex justify-between text-xs text-gray-500">
@@ -1214,9 +1585,10 @@ export function GroupDashboard() {
                 { headers: { Authorization: `Bearer ${token}` } }
               );
               // Assume backend returns the number of coins added
-              const coinsAdded = typeof response.data === "number"
-                ? response.data
-                : response.data.coins ?? coinsToAdd;
+              const coinsAdded =
+                typeof response.data === "number"
+                  ? response.data
+                  : response.data.coins ?? coinsToAdd;
               setMonthlyLimit(monthlyLimit + coinsAdded);
               setRemainingCoins(remainingCoins + coinsAdded);
               toast.success("Coins added!");
@@ -1240,11 +1612,13 @@ export function GroupDashboard() {
                 <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-4 sm:p-6 shadow-lg border border-white/20 h-full">
                   <div className="flex items-center justify-between h-full">
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs sm:text-sm text-gray-600">Total Expenses</p>
+                      <p className="text-xs sm:text-sm text-gray-600">
+                        Total Expenses
+                      </p>
                       <div className="flex items-center gap-1 sm:gap-2 mt-1">
                         <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5 text-green-600 flex-shrink-0" />
                         <animated.p className="text-lg sm:text-2xl font-bold text-green-600 truncate">
-                          {animatedTotal.number.to(n => n.toFixed(2))}
+                          {animatedTotal.number.to((n) => safeToFixed(n, 2))}
                         </animated.p>
                       </div>
                     </div>
@@ -1255,12 +1629,16 @@ export function GroupDashboard() {
                 {/* Give/Take (half) */}
                 <div
                   className="bg-white/70 backdrop-blur-sm rounded-2xl p-4 sm:p-6 shadow-lg border border-white/20 h-full flex items-center justify-between cursor-pointer hover:shadow-indigo-200 hover:scale-[1.03] transition-transform"
-                  onClick={() => navigate('/give-take-dashboard')}
+                  onClick={() => navigate("/give-take-dashboard")}
                   title="Go to Give & Take Dashboard"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs sm:text-sm text-gray-600">Give/Take</p>
-                    <p className="text-lg sm:text-2xl font-bold text-blue-700 mt-1">Track Now</p>
+                    <p className="text-xs sm:text-sm text-gray-600">
+                      Give/Take
+                    </p>
+                    <div className="flex items-center gap-2 text-lg sm:text-2xl font-bold text-blue-700 mt-1">
+                      <span>Friends</span>
+                    </div>
                   </div>
                   <ArrowLeftRight className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600 flex-shrink-0" />
                 </div>
@@ -1272,15 +1650,17 @@ export function GroupDashboard() {
           return (
             <div className="grid grid-cols-1 gap-4 sm:gap-6 mb-6 sm:mb-8">
               {/* Total Expenses Card (span full width when multiple members) */}
-              { (currentGroup?.users?.length || 0) > 1 && (
+              {(currentGroup?.users?.length || 0) > 1 && (
                 <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-4 sm:p-6 shadow-lg border border-white/20 w-full">
                   <div className="flex items-center justify-between">
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs sm:text-sm text-gray-600">Total Expenses</p>
+                      <p className="text-xs sm:text-sm text-gray-600">
+                        Total Expenses
+                      </p>
                       <div className="flex items-center gap-1 sm:gap-2 mt-1">
                         <IndianRupee className="h-4 w-4 sm:h-5 sm:w-5 flex-shrink-0" />
                         <animated.p className="text-lg sm:text-2xl font-bold text-gray-900 truncate">
-                          {animatedTotal.number.to(n => n.toFixed(2))}
+                          {animatedTotal.number.to((n) => safeToFixed(n, 2))}
                         </animated.p>
                       </div>
                     </div>
@@ -1295,17 +1675,21 @@ export function GroupDashboard() {
                 <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-4 sm:p-6 shadow-lg border border-white/20 h-full">
                   <div className="flex items-center justify-between h-full">
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs sm:text-sm text-gray-600">Your Total Spent</p>
+                      <p className="text-xs sm:text-sm text-gray-600">
+                        Your Total Spent
+                      </p>
                       <p className="text-lg sm:text-2xl font-bold text-green-600 mt-1 truncate">
                         ₹{" "}
                         {activeTab === "previous"
-                          ? previousMonthCurrentUserExpense.toFixed(2)
+                          ? safeToFixed(previousMonthCurrentUserExpense)
                           : activeTab === "expenses"
-                          ? currentUserCurrentMonthExpense.toFixed(2)
+                          ? modalCurrentType === "TRIP"
+                            ? safeToFixed(currentUserAllExpense)
+                            : safeToFixed(currentUserCurrentMonthExpense)
                           : activeTab === "members"
-                          ? currentUserCurrentMonthExpense.toFixed(2)
+                          ? safeToFixed(currentUserCurrentMonthExpense)
                           : typeof currentBalance === "number"
-                          ? currentBalance.toFixed(2)
+                          ? safeToFixed(currentBalance)
                           : "0.00"}
                       </p>
                     </div>
@@ -1318,12 +1702,17 @@ export function GroupDashboard() {
                 {/* Give/Take (right half, clickable) */}
                 <div
                   className="bg-white/70 backdrop-blur-sm rounded-2xl p-4 sm:p-6 shadow-lg border border-white/20 h-full flex items-center justify-between cursor-pointer hover:shadow-indigo-200 hover:scale-[1.03] transition-transform"
-                  onClick={() => navigate('/give-take-dashboard')}
+                  onClick={() => navigate("/give-take-dashboard")}
                   title="Go to Give & Take Dashboard"
                 >
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs sm:text-sm text-gray-600">Give/Take</p>
-                    <p className="text-lg sm:text-2xl font-bold text-blue-700 mt-1">Khata</p>
+                    <p className="text-xs sm:text-sm text-gray-600">
+                      Give/Take
+                    </p>
+                    <div className="flex items-center gap-2 text-lg sm:text-2xl font-bold text-blue-700 mt-1">
+                      {/* <HandCoins className="h-5 w-5 sm:h-6 sm:w-6 text-blue-600" /> */}
+                      <span>Friends</span>
+                    </div>
                   </div>
                   <ArrowLeftRight className="h-6 w-6 sm:h-8 sm:w-8 text-blue-600 flex-shrink-0" />
                 </div>
@@ -1346,11 +1735,15 @@ export function GroupDashboard() {
                     : "border-transparent text-gray-500 hover:text-gray-700"
                 }`}
               >
-                Expenses ({currentMonthExpenses?.length || 0})
+                Expenses (
+                {modalCurrentType === "TRIP"
+                  ? currentGroup?.expenses?.length || 0
+                  : currentMonthExpenses?.length || 0}
+                )
               </button>
 
               {/* Members Tab (hide when only one member) */}
-              { (currentGroup?.users?.length || 0) > 1 && (
+              {(currentGroup?.users?.length || 0) > 1 && (
                 <button
                   onClick={() => setActiveTab("members")}
                   className={`flex-1 text-center py-3 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap ${
@@ -1364,17 +1757,19 @@ export function GroupDashboard() {
               )}
 
               {/* Previous Months Tab */}
-              <button
-                onClick={() => setActiveTab("previous")}
-                className={`flex-1 text-center py-3 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap ${
-                  activeTab === "previous"
-                    ? "border-blue-500 text-blue-600"
-                    : "border-transparent text-gray-500 hover:text-gray-700"
-                }`}
-              >
-                Previous Months
-              </button>
-              </div>
+              {modalCurrentType !== "TRIP" && (
+                <button
+                  onClick={() => setActiveTab("previous")}
+                  className={`flex-1 text-center py-3 px-2 sm:px-3 border-b-2 font-medium text-xs sm:text-sm whitespace-nowrap ${
+                    activeTab === "previous"
+                      ? "border-blue-500 text-blue-600"
+                      : "border-transparent text-gray-500 hover:text-gray-700"
+                  }`}
+                >
+                  Previous Months
+                </button>
+              )}
+            </div>
           </nav>
 
           {/* Tab Content */}
@@ -1382,9 +1777,17 @@ export function GroupDashboard() {
             {/* Current Month Expenses Content */}
             {activeTab === "expenses" && (
               <ExpenseList
-                expenses={currentMonthExpenses || []}
+                expenses={
+                  modalCurrentType === "TRIP"
+                    ? currentGroup?.expenses || []
+                    : currentMonthExpenses || []
+                }
                 onExpenseDeleted={handleExpenseDeleted}
                 onDeleteRequest={handleDeleteRequest}
+                showCalendar={showCalendar}
+                onShowCalendar={handleShowCalendar}
+                calendarBaseDate={new Date()}
+                groupType={modalCurrentType}
               />
             )}
 
@@ -1411,13 +1814,13 @@ export function GroupDashboard() {
               ) : (
                 <p className="text-center text-gray-500">No members found.</p>
               ))}
-      {/* Member Expenses Modal */}
-      <MemberExpensesModal
-        isOpen={!!selectedMember}
-        onClose={() => setSelectedMember(null)}
-        member={selectedMember}
-        expenses={selectedMemberExpenses}
-      />
+            {/* Member Expenses Modal */}
+            <MemberExpensesModal
+              isOpen={!!selectedMember}
+              onClose={() => setSelectedMember(null)}
+              member={selectedMember}
+              expenses={selectedMemberExpenses}
+            />
 
             {/* Previous Months Content */}
             {activeTab === "previous" && (
@@ -1501,8 +1904,10 @@ export function GroupDashboard() {
                 </div>
 
                 {/* Member Expenses Summary for Selected Month */}
-                {activeTab === "previous" && previousMonthExpenses.length > 0 && (currentGroup?.users?.length || 0) > 1 && (
-                  loadingPrevious ? (
+                {activeTab === "previous" &&
+                  previousMonthExpenses.length > 0 &&
+                  (currentGroup?.users?.length || 0) > 1 &&
+                  (loadingPrevious ? (
                     <div className="flex justify-center items-center mb-6">
                       <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                     </div>
@@ -1523,8 +1928,7 @@ export function GroupDashboard() {
                         balances={previousMonthUserExpenses}
                       />
                     </div>
-                  )
-                )}
+                  ))}
 
                 {/* Detailed Expense List for Selected Month */}
                 <div>
@@ -1540,6 +1944,12 @@ export function GroupDashboard() {
                       expenses={previousMonthExpenses}
                       onExpenseDeleted={handleExpenseDeleted}
                       onDeleteRequest={handleDeleteRequest}
+                      showCalendar={showCalendar}
+                      onShowCalendar={handleShowCalendar}
+                      calendarBaseDate={
+                        new Date(selectedYear, selectedMonth, 1)
+                      }
+                      groupType={modalCurrentType}
                     />
                   )}
                 </div>
@@ -1552,7 +1962,9 @@ export function GroupDashboard() {
       {/* === MODALS === */}
 
       {/* Confetti Celebration */}
-      {celebrate && <Confetti width={window.innerWidth} height={window.innerHeight} />}
+      {celebrate && (
+        <Confetti width={window.innerWidth} height={window.innerHeight} />
+      )}
       {/* Add Expense Modal */}
       {showAddExpenses && (
         <AddExpenseModal
@@ -1570,150 +1982,167 @@ export function GroupDashboard() {
         />
       )}
 
-  {/* Coins History Modal */}
-  <CoinsHistory isOpen={showCoinsHistory} onClose={() => setShowCoinsHistory(false)} />
+      {/* Coins History Modal */}
+      <CoinsHistory
+        isOpen={showCoinsHistory}
+        onClose={() => setShowCoinsHistory(false)}
+      />
 
-  {/* Members Popup - simple list of member names */}
-  {showMembersPopup && (currentGroup?.users?.length || 0) > 1 && (
-   <AnimatePresence>
-  <motion.div
-    className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-xl p-4"
-    initial={{ opacity: 0 }}
-    animate={{ opacity: 1 }}
-    exit={{ opacity: 0 }}
-    onClick={() => setShowMembersPopup(false)} // click outside to close
-  >
-    <motion.div
-      className="relative bg-[#1E1E1E]/90 backdrop-blur-xl rounded-3xl shadow-[0_8px_40px_rgba(0,0,0,0.6)] w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col border border-[#2A2A2A]"
-      initial={{ scale: 0.95, opacity: 0 }}
-      animate={{ scale: 1, opacity: 1 }}
-      exit={{ scale: 0.95, opacity: 0 }}
-      transition={{ duration: 0.25 }}
-      onClick={(e) => e.stopPropagation()} // prevent close when clicking inside
-    >
-      {/* Header */}
-      <div className="sticky top-0 bg-[#1E1E1E]/80 backdrop-blur-md p-4 border-b border-[#2A2A2A] flex items-center justify-between">
-        <h3 className="text-xl font-semibold text-gray-100 tracking-wide flex items-center gap-2">
-          <Users className="w-5 h-5 text-gray-300" />
-          Group Members
-        </h3>
-
-        <button
-          onClick={() => setShowMembersPopup(false)}
-          className="p-2 text-gray-400 hover:text-gray-200 transition-transform transform hover:rotate-90 duration-200 active:scale-95"
-          title="Close"
-        >
-          <X className="w-5 h-5" />
-        </button>
-      </div>
-
-      {/* Members List */}
-      <div className="flex-1 overflow-y-auto p-5 space-y-3 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
-        {(currentGroup?.users || []).length === 0 ? (
-          <div className="text-center text-gray-500 py-10 text-sm italic">
-            No members found.
-          </div>
-        ) : (
-          currentGroup.users.map((u, idx) => (
+      {/* Members Popup - simple list of member names */}
+      {showMembersPopup && (currentGroup?.users?.length || 0) > 1 && (
+        <AnimatePresence>
+          <motion.div
+            className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/70 backdrop-blur-xl p-4"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowMembersPopup(false)} // click outside to close
+          >
             <motion.div
-              key={u.userId || u.id || u._id || idx}
-              className="p-4 rounded-2xl border border-[#2A2A2A] bg-gradient-to-br from-[#1C1C1C] to-[#111111] hover:shadow-[0_0_15px_rgba(255,255,255,0.05)] transition-all flex items-center justify-between"
-              whileHover={{ scale: 1.02 }}
-              aria-current={currentUserId && (String(currentUserId) === String(u.userId)) ? 'true' : undefined}
+              className="relative bg-[#1E1E1E]/90 backdrop-blur-xl rounded-3xl shadow-[0_8px_40px_rgba(0,0,0,0.6)] w-full max-w-lg max-h-[90vh] overflow-hidden flex flex-col border border-[#2A2A2A]"
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ duration: 0.25 }}
+              onClick={(e) => e.stopPropagation()} // prevent close when clicking inside
             >
-              {/* Left section - Avatar + Info */}
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center h-10 w-10 rounded-full bg-[#2B2B2B] text-gray-200 font-semibold text-sm border border-[#3A3A3A] shadow-inner">
-                  {(u.name || u.username || u.userId)?.[0]?.toUpperCase() || '?'}
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <div className="text-sm font-medium text-gray-100 tracking-wide">
-                      {u.name || u.username || u.userId}
-                    </div>
-                    {currentUserId && String(currentUserId) === String(u.userId) && (
-                      <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-semibold">You</span>
-                    )}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-0.5">{u.userId}</div>
-                </div>
+              {/* Header */}
+              <div className="sticky top-0 bg-[#1E1E1E]/80 backdrop-blur-md p-4 border-b border-[#2A2A2A] flex items-center justify-between">
+                <h3 className="text-xl font-semibold text-gray-100 tracking-wide flex items-center gap-2">
+                  <Users className="w-5 h-5 text-gray-300" />
+                  Group Members
+                </h3>
+
+                <button
+                  onClick={() => setShowMembersPopup(false)}
+                  className="p-2 text-gray-400 hover:text-gray-200 transition-transform transform hover:rotate-90 duration-200 active:scale-95"
+                  title="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
 
-              {/* Right section - status or role (optional) */}
-              {u.role && (
-                <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-[#2A2A2A] text-gray-400 border border-[#333]">
-                  {u.role}
-                </span>
-              )}
+              {/* Members List */}
+              <div className="flex-1 overflow-y-auto p-5 space-y-3 scrollbar-thin scrollbar-thumb-gray-700 scrollbar-track-transparent">
+                {(currentGroup?.users || []).length === 0 ? (
+                  <div className="text-center text-gray-500 py-10 text-sm italic">
+                    No members found.
+                  </div>
+                ) : (
+                  currentGroup.users.map((u, idx) => (
+                    <motion.div
+                      key={u.userId || u.id || u._id || idx}
+                      className="p-4 rounded-2xl border border-[#2A2A2A] bg-gradient-to-br from-[#1C1C1C] to-[#111111] hover:shadow-[0_0_15px_rgba(255,255,255,0.05)] transition-all flex items-center justify-between"
+                      whileHover={{ scale: 1.02 }}
+                      aria-current={
+                        currentUserId &&
+                        String(currentUserId) === String(u.userId)
+                          ? "true"
+                          : undefined
+                      }
+                    >
+                      {/* Left section - Avatar + Info */}
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center justify-center h-10 w-10 rounded-full bg-[#2B2B2B] text-gray-200 font-semibold text-sm border border-[#3A3A3A] shadow-inner">
+                          {(u.name ||
+                            u.username ||
+                            u.userId)?.[0]?.toUpperCase() || "?"}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <div className="text-sm font-medium text-gray-100 tracking-wide">
+                              {u.name || u.username || u.userId}
+                            </div>
+                            {currentUserId &&
+                              String(currentUserId) === String(u.userId) && (
+                                <span className="text-xs bg-blue-600 text-white px-2 py-0.5 rounded-full font-semibold">
+                                  You
+                                </span>
+                              )}
+                          </div>
+                          <div className="text-xs text-gray-500 mt-0.5">
+                            {u.userId}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right section - status or role (optional) */}
+                      {u.role && (
+                        <span className="px-2 py-0.5 text-xs font-medium rounded-full bg-[#2A2A2A] text-gray-400 border border-[#333]">
+                          {u.role}
+                        </span>
+                      )}
+                    </motion.div>
+                  ))
+                )}
+              </div>
             </motion.div>
-          ))
-        )}
-      </div>
-    </motion.div>
-  </motion.div>
-</AnimatePresence>
-
- 
-
-  )}
-
-    {/* Quick Add Popup - Enhanced Modern UI */}
-    {showQuickAddPopup && quickAddTime !== null && quickAddTime < 2000 && (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-lg">
-        <motion.div
-          initial={{ opacity: 0, scale: 0.7, y: 50 }}
-          animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.7, y: 50 }}
-          transition={{ duration: 0.4, ease: "easeOut" }}
-          className="relative bg-gradient-to-br from-blue-50 via-white to-purple-100 shadow-2xl rounded-3xl p-8 w-[90%] max-w-xs border-2 border-blue-300/40 flex flex-col items-center overflow-hidden"
-        >
-          {/* Animated Glow & Confetti */}
-          <div className="absolute inset-0 pointer-events-none">
-            <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-tr from-blue-200/40 to-purple-200/30 blur-2xl rounded-3xl animate-pulse" />
-          </div>
-
-          {/* Emoji bounce and sparkles */}
-          <motion.div
-            initial={{ scale: 0 }}
-            animate={{ scale: [1.3, 0.95, 1.1, 1] }}
-            transition={{ duration: 0.7, ease: "easeOut" }}
-            className="z-10 mb-2"
-          >
-            <span className="text-6xl drop-shadow-lg">🚀</span>
           </motion.div>
+        </AnimatePresence>
+      )}
+
+      {/* Quick Add Popup - Enhanced Modern UI */}
+      {showQuickAddPopup && quickAddTime !== null && quickAddTime < 2000 && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-lg">
           <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 1, ease: "easeOut", repeat: Infinity, repeatType: "reverse" }}
-            className="z-10"
+            initial={{ opacity: 0, scale: 0.7, y: 50 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.7, y: 50 }}
+            transition={{ duration: 0.4, ease: "easeOut" }}
+            className="relative bg-gradient-to-br from-blue-50 via-white to-purple-100 shadow-2xl rounded-3xl p-8 w-[90%] max-w-xs border-2 border-blue-300/40 flex flex-col items-center overflow-hidden"
           >
-            <span className="text-2xl">✨</span>
+            {/* Animated Glow & Confetti */}
+            <div className="absolute inset-0 pointer-events-none">
+              <div className="absolute top-0 left-0 w-full h-full bg-gradient-to-tr from-blue-200/40 to-purple-200/30 blur-2xl rounded-3xl animate-pulse" />
+            </div>
+
+            {/* Emoji bounce and sparkles */}
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: [1.3, 0.95, 1.1, 1] }}
+              transition={{ duration: 0.7, ease: "easeOut" }}
+              className="z-10 mb-2"
+            >
+              <span className="text-6xl drop-shadow-lg">🚀</span>
+            </motion.div>
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{
+                delay: 0.2,
+                duration: 1,
+                ease: "easeOut",
+                repeat: Infinity,
+                repeatType: "reverse",
+              }}
+              className="z-10"
+            >
+              <span className="text-2xl">✨</span>
+            </motion.div>
+
+            {/* Title */}
+            <h3 className="text-2xl font-extrabold bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-600 bg-clip-text text-transparent z-10 mt-2 tracking-tight text-center">
+              Too Fast ⚡
+            </h3>
+
+            {/* Subtitle */}
+            <p className="text-base text-gray-700 text-center mt-3 z-10 font-medium">
+              <span className="font-extrabold text-blue-700 mr-1">
+                {currentUserFirstName}!
+              </span>
+              <span className="text-gray-700">Well done added in just </span>
+              <span className="font-extrabold text-blue-700 mx-1 text-lg">
+                {safeToFixed(quickAddTime / 1000)}s
+              </span>
+            </p>
+            <div className="mt-4 z-10">
+              <span className="inline-block px-4 py-2 rounded-full bg-gradient-to-r from-blue-100 to-purple-100 text-blue-700 font-semibold shadow-md animate-bounce">
+                Amazing Speed!
+              </span>
+            </div>
           </motion.div>
-
-          {/* Title */}
-          <h3 className="text-2xl font-extrabold bg-gradient-to-r from-blue-600 via-indigo-500 to-purple-600 bg-clip-text text-transparent z-10 mt-2 tracking-tight text-center">
-            Too Fast ⚡
-          </h3>
-
-          {/* Subtitle */}
-          <p className="text-base text-gray-700 text-center mt-3 z-10 font-medium">
-            <span className="font-extrabold text-blue-700 mr-1">{currentUserFirstName}!</span>
-            <span className="text-gray-700">Well done added in just </span>
-            <span className="font-extrabold text-blue-700 mx-1 text-lg">
-              {(quickAddTime / 1000).toFixed(2)}s
-            </span>
-            
-          </p>
-          <div className="mt-4 z-10">
-            <span className="inline-block px-4 py-2 rounded-full bg-gradient-to-r from-blue-100 to-purple-100 text-blue-700 font-semibold shadow-md animate-bounce">
-              Amazing Speed!
-            </span>
-          </div>
-        </motion.div>
-      </div>
-    )}
-
-
+        </div>
+      )}
 
       {/* Delete Confirmation Modal */}
       {expenseToDelete && (
@@ -1749,7 +2178,7 @@ export function GroupDashboard() {
               </span>{" "}
               of{" "}
               <span className="font-semibold text-red-600">
-                ₹{expenseToDelete.amount.toFixed(2)}
+                ₹{safeToFixed(expenseToDelete.amount)}
               </span>
               ?
             </p>
@@ -1780,6 +2209,30 @@ export function GroupDashboard() {
             </div>
           </motion.div>
         </div>
+      )}
+
+      {/* Calendar Modal (for non-TRIP groups) */}
+      {modalCurrentType !== "TRIP" && (
+        <CalendarView
+          expenses={
+            activeTab === "previous"
+              ? previousMonthExpenses
+              : currentMonthExpenses || []
+          }
+          isOpen={showCalendar}
+          onClose={handleCloseCalendar}
+          initialDate={calendarBaseDate}
+        />
+      )}
+
+      {/* Trip Timeline Modal (for TRIP groups only) */}
+      {modalCurrentType === "TRIP" && (
+        <TripTimeline
+          expenses={currentGroup?.expenses || []}
+          isOpen={showCalendar}
+          onClose={handleCloseCalendar}
+          groupName={currentGroup?.groupName || "Trip"}
+        />
       )}
     </div>
   );

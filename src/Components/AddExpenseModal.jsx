@@ -16,6 +16,7 @@ import {
 import { useGroup } from "../Context/GroupContext";
 import { getApiUrl } from "../Utils/api";
 import { toast } from "react-hot-toast";
+import { safeToFixed } from "../Utils/Calculation";
 
 // Per-group-type colors (used for border/text emphasis)
 const COLORS = {
@@ -51,54 +52,22 @@ export const AddExpenseModal = ({ isOpen, onClose, onCelebrate, onQuickAdd }) =>
 
   const commonTags = [
     // Deduplicated list (duplicates removed, order preserved where possible)
-    "chai",
-    "coffee",
-    "cold coffee",
-    "juice",
-    "cold drink",
+    "chai","coffee","cold coffee","juice","cold drink",
 
     // Canteen / Mess
-    "canteen",
-    "mess",
+    "canteen","mess",
 
     // Meals
-    "breakfast",
-    "lunch",
-    "dinner",
-    "thali",
-    "biryani",
+    "breakfast","lunch","dinner","thali","biryani",
 
     // Fast food / snacks
-    "maggi",
-    "noodles",
-    "chowmein",
-    "pasta",
-    "fried rice",
-    "roll",
-    "paratha",
-    "idli",
-    "dosa",
-    "samosa",
-    "momos",
-    "pani puri",
-    "golgappa",
-    "paneer",
+    "maggi","noodles","chowmein", "pasta","fried rice","roll","paratha","idli", "dosa", "samosa","momos","pani puri","golgappa","paneer",
 
     // Western / other
-    "pizza",
-    "burger",
-    "sandwich",
-    "snacks",
-    "chips",
-    "biscuits",
-    "dessert",
-    "ice cream",
-    "salad",
+    "pizza","burger","sandwich","snacks","chips","biscuits","dessert","ice cream","salad",
 
     // Protein / non-veg
-    "chicken",
-    "mutton",
-    "paneer tikka",
+    "chicken","mutton","paneer tikka",
 
     // Other common food items
     "fruits",
@@ -423,8 +392,26 @@ export const AddExpenseModal = ({ isOpen, onClose, onCelebrate, onQuickAdd }) =>
   const fetchAllGroups = async () => {
     setIsLoadingGroups(true);
     try {
-      const groups = await contextFetchAllGroups();
-      setAllGroups(groups || []);
+      // For this modal we only need minimal group metadata (id/code/name).
+      // Fetch /pg/group-metadata which returns a lightweight list instead of full group objects.
+      const token = localStorage.getItem("token");
+      const resp = await axios.get(getApiUrl("/pg/group-metadata"), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const payload = resp.data || [];
+      // Backend may return { groups: [...] } or an array directly
+      const items = Array.isArray(payload) ? payload : payload.groups || payload.data || [];
+
+      const normalized = items.map((g) => ({
+        // prefer numeric id fields when available
+        id: g.id ?? g.groupId ?? null,
+        groupId: g.id ?? g.groupId ?? null,
+        groupCode: g.groupCode ?? g.code ?? g.groupCode ?? g.code ?? null,
+        groupName: g.groupName ?? g.name ?? g.group_name ?? g.groupName ?? "Unnamed Group",
+        groupType: g.groupType ?? g.type ?? g.group_type ?? "OTHERS",
+      }));
+
+      setAllGroups(normalized || []);
     } catch (error) {
       // Failed to fetch groups
       setAllGroups([]);
@@ -435,7 +422,7 @@ export const AddExpenseModal = ({ isOpen, onClose, onCelebrate, onQuickAdd }) =>
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-  const addStartTime = Date.now();
+    const addStartTime = Date.now();
     setIsLoading(true);
 
     // Check if user has enough coins before proceeding
@@ -477,39 +464,57 @@ export const AddExpenseModal = ({ isOpen, onClose, onCelebrate, onQuickAdd }) =>
 
         //the response from the backend
         console.log("Expense added successfully:", data);
-        // Add the returned expense directly to the currentGroup context
-        if (setCurrentGroup && currentGroup && data) {
+        
+        // ✅ OPTIMIZED: Update context ONLY with new data - NO re-fetching
+        // Backend response structure: { expense: {...}, remainingCoins: number }
+        const expenseData = data.expense || data;
+        
+        if (setCurrentGroup && currentGroup && expenseData) {
           const newExpense = {
-            ...data,
-            amount: data.amount,
-            tags: data.tags,
-            paymentDate: data.paymentDate,
-            paidBy: data.paidBy,
-            createdAt: data.createdAt,
-            id: data.id || data._id,
+            ...expenseData,
+            amount: expenseData.amount,
+            tags: expenseData.tags,
+            paymentDate: expenseData.paymentDate,
+            paidBy: expenseData.paidBy,
+            createdAt: expenseData.createdAt,
+            id: expenseData.id || expenseData._id,
+            userId: expenseData.userId,
           };
-          setCurrentGroup({
+          
+          // Update the current group with the new expense
+          const updatedGroup = {
             ...currentGroup,
             expenses: [...(currentGroup.expenses || []), newExpense],
-          });
+          };
+          
+          // Update via skipFetch option to prevent automatic re-fetch
+          setCurrentGroup(updatedGroup, { skipFetch: true });
+          
+          // Persist updated group to localStorage
+          try {
+            localStorage.setItem('currentGroup', JSON.stringify(updatedGroup));
+          } catch (e) {
+            // ignore storage errors
+          }
         }
-        // Update total amount
+        
+        // Update remaining coins directly from backend response
+        if (setRemainingCoins && typeof data.remainingCoins !== "undefined") {
+          setRemainingCoins(data.remainingCoins);
+        }
+        
+        // Update other user stats if available
         if (setTotalExpenses && typeof data.user?.totalExpenses !== "undefined") {
           setTotalExpenses(data.user.totalExpenses);
         }
-        // Update remaining coins
-        if (setRemainingCoins && typeof data.user?.remainingCoins !== "undefined") {
-          setRemainingCoins(data.user.remainingCoins);
-        }
-        // Update monthly limit
         if (setMonthlyLimit && typeof data.user?.monthlyLimitCoins !== "undefined") {
           setMonthlyLimit(data.user.monthlyLimitCoins);
         }
-  const totalGroups = (groupIds || []).length;
+        
         // Calculate and show time taken
         const timeTakenMs = Date.now() - addStartTime;
         const timeTakenSec = timeTakenMs / 1000;
-        toast.success(`You added in just ${timeTakenSec.toFixed(2)} second${timeTakenSec < 2 ? '' : 's'}!`, {
+        toast.success(`You added in just ${safeToFixed(timeTakenSec)} second${timeTakenSec < 2 ? '' : 's'}!`, {
           duration: 3000,
           position: "top-center",
         });

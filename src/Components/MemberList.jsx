@@ -2,6 +2,7 @@
 import React, { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { Users, IndianRupee, ArrowLeftRight } from "lucide-react";
+import { safeToFixed } from "../Utils/Calculation";
 
 export const MemberList = ({ users = [], balances = [], onMemberClick }) => {
   const [showSettlements, setShowSettlements] = useState(false);
@@ -34,8 +35,8 @@ export const MemberList = ({ users = [], balances = [], onMemberClick }) => {
       const owe = -debtor.net;
       const receive = creditor.net;
       const amount = Math.min(owe, receive);
-      if (amount > EPS) {
-        txs.push({ from: debtor.userId, to: creditor.userId, amount: +amount.toFixed(2) });
+        if (amount > EPS) {
+        txs.push({ from: debtor.userId, to: creditor.userId, amount: Number(safeToFixed(amount)) });
         debtor.net += amount; // less negative
         creditor.net -= amount;
       }
@@ -68,7 +69,7 @@ export const MemberList = ({ users = [], balances = [], onMemberClick }) => {
     <span className="px-3 py-1.5 text-xs font-medium text-blue-500 
                      bg-blue-50/10 border border-blue-500/20 
                      rounded-full shadow-sm">
-      Avg: {averageSpent.toFixed(2)}
+      Avg: {safeToFixed(averageSpent)}
     </span>
 
     {/* Settle Up Button */}
@@ -115,7 +116,7 @@ export const MemberList = ({ users = [], balances = [], onMemberClick }) => {
                   <div className="flex items-center space-x-3">
                     <div className="text-right">
                       <p className="text-xl font-bold text-green-600">
-                        {totalSpent.toFixed(2)}
+                        {safeToFixed(totalSpent)}
                       </p>
                     </div>
                     <div className="p-2 rounded-full bg-green-100">
@@ -155,8 +156,8 @@ export const MemberList = ({ users = [], balances = [], onMemberClick }) => {
               <div className="text-right">
                 <div className="flex items-center space-x-3">
                   <div className="text-right">
-                    <p className="text-xl font-bold text-green-600">
-                      {totalSpent.toFixed(2)}
+                      <p className="text-xl font-bold text-green-600">
+                      {safeToFixed(totalSpent)}
                     </p>
                     <span
                       className={`px-2 py-1 text-xs font-medium rounded-full shadow-sm ${
@@ -166,8 +167,8 @@ export const MemberList = ({ users = [], balances = [], onMemberClick }) => {
                       }`}
                     >
                       {isPositive
-                        ? `+${Math.abs(diff).toFixed(2)}`
-                        : `-${Math.abs(diff).toFixed(2)}`}
+                        ? `+${safeToFixed(Math.abs(diff))}`
+                        : `-${safeToFixed(Math.abs(diff))}`}
                     </span>
                   </div>
                   <div className="p-2 rounded-full bg-green-100">
@@ -225,7 +226,7 @@ export const MemberList = ({ users = [], balances = [], onMemberClick }) => {
                       </div>
 
                       <div className="text-green-400 font-semibold text-sm">
-                        ₹{s.amount.toFixed(2)}
+                        ₹{safeToFixed(s.amount)}
                       </div>
                     </div>
                   );

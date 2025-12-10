@@ -16,6 +16,7 @@ import { useSpring, animated } from "@react-spring/web";
 
 import { formatDateIndian } from "../Utils/formatDateIndian";
 import { useGroup } from "../Context/GroupContext";
+import { safeToFixed } from "../Utils/Calculation";
 
 export default function GiveTakeDashboard() {
   // Transactions state
@@ -218,6 +219,27 @@ export default function GiveTakeDashboard() {
   };
   const handleGiveFormSubmit = async (e) => {
     e.preventDefault();
+    
+    // ✅ Frontend validation: Check if trying to give more than remaining coins
+    const giveAmount = Number(giveForm.amount);
+    const currentRemaining = remainingCoins !== null ? remainingCoins : globalRemainingCoins;
+    
+    if (!giveForm.amount || isNaN(giveAmount) || giveAmount <= 0) {
+      toast.error("Please enter a valid amount.");
+      return;
+    }
+    
+    if (typeof currentRemaining === 'number' && giveAmount > currentRemaining) {
+      toast.error(
+        `You only have ₹${currentRemaining} coins left to give. Please add more coins to continue.`,
+        {
+          duration: 4000,
+          icon: "⚠️",
+        }
+      );
+      return;
+    }
+    
     setIsSubmittingGive(true);
     try {
       const token = localStorage.getItem("token");
@@ -348,7 +370,7 @@ export default function GiveTakeDashboard() {
                 </span>
               </div>
               <animated.p className="text-2xl sm:text-3xl font-bold text-green-500">
-                {givenSpring.val.to((val) => `₹ ${val.toFixed(2)}`)}
+                {givenSpring.val.to((val) => `₹ ${safeToFixed(val)}`)}
               </animated.p>
             </div>
 
@@ -361,7 +383,7 @@ export default function GiveTakeDashboard() {
                 </span>
               </div>
               <animated.p className="text-2xl sm:text-3xl font-bold text-red-500">
-                {takenSpring.val.to((val) => `₹ ${val.toFixed(2)}`)}
+                {takenSpring.val.to((val) => `₹ ${safeToFixed(val)}`)}
               </animated.p>
             </div>
             {/* remaining coins toast handled via effect (no pill here) */}

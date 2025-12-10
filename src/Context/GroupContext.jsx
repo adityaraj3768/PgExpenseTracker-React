@@ -15,6 +15,7 @@ export const GroupProvider = ({ children }) => {
   const [coins, setCoins] = useState(0);
   const [monthlyLimit, setMonthlyLimit] = useState(0);
   const [remainingCoins, setRemainingCoins] = useState(0);
+  const [groupLoading, setGroupLoading] = useState(false);
 
   const { currentUserId } = useUser(); // ✅ keep here, but read it in useEffect
    
@@ -27,6 +28,7 @@ export const GroupProvider = ({ children }) => {
       return;
     }
     try {
+      setGroupLoading(true);
       const token = localStorage.getItem("token");
 
       // Get current month (0-based, so add 1) and year
@@ -34,84 +36,83 @@ export const GroupProvider = ({ children }) => {
       const month = now.getMonth() + 1;
       const year = now.getFullYear();
 
+      const groupId = groupToFetch.groupId || groupToFetch.id || groupToFetch.groupCode || groupToFetch.code;
+      if (!groupId) return;
+
+      // Fetch single-group endpoint (backend may return the group object directly)
       const response = await axios.get(
-        getApiUrl(`/pg/my-groups?month=${month}&year=${year}`),
+        getApiUrl(`/pg/my-group?groupId=${groupId}&month=${month}&year=${year}`),
         {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         }
       );
-  // Fetch group backend response handled
-      const groups = Array.isArray(response.data.groups) ? response.data.groups : [response.data.groups];
-      const groupIdentifier = groupToFetch.groupCode || groupToFetch.code || groupToFetch.id;
-      // Find the current group in the list
-      const updatedGroup = groups.find(g => 
-        g.groupCode === groupIdentifier || g.code === groupIdentifier || g.id === groupIdentifier
-      );
-      if (updatedGroup) {
-        setCurrentGroup(updatedGroup);
-        setMonthlyLimit(response.data.monthlyLimitCoins || 0);
+
+      const fullGroup = response.data.group || response.data;
+      if (fullGroup) {
+        setCurrentGroup(fullGroup);
+        setMonthlyLimit(response.data.monthlyLimitCoins || response.data.monthlyLimit || 0);
         setRemainingCoins(response.data.remainingCoins || 0);
-      } else {
-  // Current group not found in user's groups
       }
     } catch (error) {
-  // Error fetching current group
+      // Error fetching current group
+    }
+    finally {
+      setGroupLoading(false);
     }
   };
 
   // Fetch and set initial group (for page refresh or first load)
   const fetchInitialGroup = async () => {
     try {
-      const token = localStorage.getItem("token");
-      
-      // Fetch all groups that the user belongs to
-
-      // Get current month (0-based, so add 1) and year
-      const now = new Date();
-      const month = now.getMonth() + 1;
-      const year = now.getFullYear();
-
-
-      const response = await axios.get(
-        getApiUrl(`/pg/my-groups?month=${month}&year=${year}`), 
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
-      );
-  // Fetch initial group backend response handled
-      
-  const groups = Array.isArray(response.data.groups) ? response.data.groups : [response.data.groups];
-      setMonthlyLimit(response.data.monthlyLimitCoins || 0);
-      setRemainingCoins(response.data.remainingCoins || 0);
-  
-      if (groups.length > 0) {
-        // Check if there's a stored group preference
-        const storedGroupCode = localStorage.getItem('currentGroupCode');
-        
-        if (storedGroupCode) {
-          // Try to find the stored group
-          const storedGroup = groups.find(g => 
-            g.groupCode === storedGroupCode || g.code === storedGroupCode || g.id === storedGroupCode
-          );
-          
-          if (storedGroup) {
-            setCurrentGroup(storedGroup);
+      // First try to restore a stored snapshot to avoid showing "No group found" briefly
+      try {
+        // First try to restore a stored snapshot to avoid showing "No group found" briefly
+        const raw = localStorage.getItem('currentGroup');
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (parsed) {
+            setCurrentGroup(parsed);
+            // refresh the snapshot from backend
+            await fetchGroup(parsed);
             return;
           }
         }
-        
-        // If no stored group or stored group not found, use the first group
-        setCurrentGroupWithStorage(groups[0]);
-      } else {
-  // User is not part of any groups
-        setCurrentGroup(null);
+      } catch (e) {
+        // ignore parse errors and continue to restore by id
       }
+
+      // If we have a stored numeric group id, fetch that single group directly
+      const storedGroupId = localStorage.getItem('currentGroupId');
+      if (storedGroupId) {
+        try {
+          const token = localStorage.getItem('token');
+          const now = new Date();
+          const month = now.getMonth() + 1;
+          const year = now.getFullYear();
+
+          const response = await axios.get(
+            getApiUrl(`/pg/my-group?groupId=${storedGroupId}&month=${month}&year=${year}`),
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+
+          const fullGroup = response.data.group || response.data;
+          if (fullGroup) {
+            setCurrentGroup(fullGroup);
+            setMonthlyLimit(response.data.monthlyLimitCoins || response.data.monthlyLimit || 0);
+            setRemainingCoins(response.data.remainingCoins || 0);
+            return;
+          }
+        } catch (err) {
+          // Failed to restore by id - fall through to no-group state
+        }
+      }
+
+      // No stored snapshot or id could be used - don't call /pg/my-groups per request
+      setCurrentGroup(null);
     } catch (error) {
-  // Error fetching initial group
+      // Error fetching initial group
       setCurrentGroup(null);
     }
   };
@@ -123,13 +124,28 @@ export const GroupProvider = ({ children }) => {
     setCurrentGroup(group);
     if (group) {
       const groupCode = group.groupCode || group.code || group.id;
-      localStorage.setItem('currentGroupCode', groupCode);
+      // Prefer numeric id for restore if available
+      const groupIdVal = group.groupId ?? group.id ?? null;
+      // Persist both a compact identifier, numeric id, and a snapshot to aid fast restore on refresh
+      try {
+        if (groupIdVal !== null && typeof groupIdVal !== 'undefined') {
+          localStorage.setItem('currentGroupId', String(groupIdVal));
+        }
+        localStorage.setItem('currentGroupCode', groupCode);
+        localStorage.setItem('currentGroup', JSON.stringify(group));
+      } catch (e) {
+        // ignore storage errors
+      }
       // Fetch latest group data (including coins) after selecting group
       if (!skipFetch) {
         await fetchGroup(group);
       }
     } else {
-      localStorage.removeItem('currentGroupCode');
+      try {
+        localStorage.removeItem('currentGroupCode');
+        localStorage.removeItem('currentGroup');
+        localStorage.removeItem('currentGroupId');
+      } catch (e) {}
     }
   };
 
@@ -142,16 +158,24 @@ export const GroupProvider = ({ children }) => {
       const now = new Date();
       const month = now.getMonth() + 1;
       const year = now.getFullYear();
-
-      const response = await axios.get(
-        getApiUrl(`/pg/my-groups?month=${month}&year=${year}`),
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
+      // Prefer returning the current group via single-group endpoint if we have an id
+      const storedGroupId = localStorage.getItem('currentGroupId') || (currentGroup?.groupId ?? currentGroup?.id);
+      if (storedGroupId) {
+        try {
+          const response = await axios.get(
+            getApiUrl(`/pg/my-group?groupId=${storedGroupId}&month=${month}&year=${year}`),
+            { headers: { Authorization: `Bearer ${token}` } }
+          );
+          const fullGroup = response.data.group || response.data;
+          return fullGroup ? [fullGroup] : [];
+        } catch (err) {
+          // fallback to empty array on error
+          return [];
         }
-      );
-  return Array.isArray(response.data.groups) ? response.data.groups : [response.data.groups];
+      }
+
+      // No stored id found, return empty list (avoid calling /pg/my-groups)
+      return [];
     } catch (error) {
   // Error fetching all groups
       return [];
@@ -177,6 +201,13 @@ export const GroupProvider = ({ children }) => {
     }
   }, [currentGroup, currentUserId]);
 
+  // Auto-load initial group when a user is available (helps on page refresh)
+  // NOTE: We no longer auto-fetch the initial group on every app mount when
+  // `currentUserId` becomes available. This prevents unexpected backend
+  // requests when the user lands on non-dashboard pages (e.g., LandingPage).
+  // Components that need the initial group (like `GroupDashboard`) should call
+  // `fetchInitialGroup()` explicitly when they're mounted.
+
   return (
     <GroupContext.Provider
       value={{
@@ -186,6 +217,7 @@ export const GroupProvider = ({ children }) => {
         totalExpenses,
         currentBalance,
         fetchGroup,
+        groupLoading,
         fetchAllGroups,
         fetchInitialGroup,
         coins,
@@ -200,3 +232,4 @@ export const GroupProvider = ({ children }) => {
     </GroupContext.Provider>
   );
 };
+ 

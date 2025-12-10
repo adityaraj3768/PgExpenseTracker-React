@@ -29,7 +29,10 @@ export const calculateBalances=(expenses,users)=>{
 
 //this will calculate the total expenses of the group
 export const getTotalExpenses=(expenses)=>{
-    return expenses.reduce((total, expense) => total + expense.amount, 0);
+    return expenses.reduce((total, expense) => {
+      const amount = Number(expense?.amount) || 0;
+      return total + (Number.isFinite(amount) ? amount : 0);
+    }, 0);
     
 };
 
@@ -38,3 +41,9 @@ export const getTotalExpenses=(expenses)=>{
 const balance=()=>{
 
     }
+
+// Safe formatter for numeric values that might be undefined/null/NaN.
+export function safeToFixed(value, digits = 2) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n.toFixed(digits) : (0).toFixed(digits);
+}
